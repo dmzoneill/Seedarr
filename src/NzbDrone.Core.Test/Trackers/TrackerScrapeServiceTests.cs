@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -76,9 +77,12 @@ public class TrackerScrapeServiceTests
             Incomplete = 13,
             Downloaded = 100
         };
-        _multiTracker.Scrape(entry, torrent.InfoHash).Returns(scrapeResponse);
+        _multiTracker.ScrapeAsync(entry, torrent.InfoHash, Arg.Any<CancellationToken>())
+            .Returns(scrapeResponse);
 
         var result = await _service.ScrapeTorrentAsync(torrentId);
+
+        _multiTracker.DidNotReceive().Scrape(Arg.Any<TrackerEntry>(), Arg.Any<string>());
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Seeders, Is.EqualTo(42));
@@ -131,23 +135,26 @@ public class TrackerScrapeServiceTests
         _trackerEntryService.GetByTorrentId(3).Returns(new List<TrackerEntry> { entry3 });
 
         // Tracker 1 returns failure response
-        _multiTracker.Scrape(entry1, torrent1.InfoHash).Returns(new TrackerScrapeResponse
-        {
-            Success = false,
-            FailureReason = "Connection timeout"
-        });
+        _multiTracker.ScrapeAsync(entry1, torrent1.InfoHash, Arg.Any<CancellationToken>())
+            .Returns(new TrackerScrapeResponse
+            {
+                Success = false,
+                FailureReason = "Connection timeout"
+            });
 
         // Tracker 2 throws an exception
-        _multiTracker.Scrape(entry2, torrent2.InfoHash).Throws(new InvalidOperationException("Socket error"));
+        _multiTracker.ScrapeAsync(entry2, torrent2.InfoHash, Arg.Any<CancellationToken>())
+            .Throws(new InvalidOperationException("Socket error"));
 
         // Tracker 3 succeeds
-        _multiTracker.Scrape(entry3, torrent3.InfoHash).Returns(new TrackerScrapeResponse
-        {
-            Success = true,
-            Complete = 25,
-            Incomplete = 5,
-            Downloaded = 50
-        });
+        _multiTracker.ScrapeAsync(entry3, torrent3.InfoHash, Arg.Any<CancellationToken>())
+            .Returns(new TrackerScrapeResponse
+            {
+                Success = true,
+                Complete = 25,
+                Incomplete = 5,
+                Downloaded = 50
+            });
 
         var count = await _service.ScrapeAllTorrentsAsync();
 
@@ -304,5 +311,100 @@ public class TrackerScrapeServiceTests
 
         Assert.That(actionResult, Is.InstanceOf<NotFoundResult>());
         await scrapeService.DidNotReceive().ScrapeTorrentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task TrackerScrapeJob_ExecuteAsync_awaits_ScrapeAllTorrentsAsync()
+    {
+        var scrapeService = Substitute.For<ITrackerScrapeService>();
+        var tcs = new TaskCompletionSource<int>();
+        scrapeService.ScrapeAllTorrentsAsync(Arg.Any<CancellationToken>()).Returns(tcs.Task);
+
+        var job = new TrackerScrapeJob(scrapeService);
+        using var cts = new CancellationTokenSource();
+
+        var executeTask = job.ExecuteAsync(cts.Token);
+        Assert.That(executeTask.IsCompleted, Is.False);
+
+        tcs.SetResult(7);
+        await executeTask;
+
+        await scrapeService.Received(1).ScrapeAllTorrentsAsync(cts.Token);
+    }
+
+    [Test]
+    public async Task ScrapeTorrentAsync_forwards_cancellation_token_to_MultiTrackerManager()
+    {
+        const int torrentId = 42;
+        var torrent = new Torrent
+        {
+            Id = torrentId,
+            Name = "Token Torrent",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567"
+        };
+        var entry = new TrackerEntry
+        {
+            Id = 11,
+            TorrentId = torrentId,
+            Url = "udp://tracker.example.com:1337/announce",
+            Enabled = true
+        };
+        _torrentService.Get(torrentId).Returns(torrent);
+        _trackerEntryService.GetByTorrentId(torrentId).Returns(new List<TrackerEntry> { entry });
+
+        using var cts = new CancellationTokenSource();
+        _multiTracker.ScrapeAsync(entry, torrent.InfoHash, cts.Token)
+            .Returns(new TrackerScrapeResponse { Success = true, Complete = 3, Incomplete = 1 });
+
+        var result = await _service.ScrapeTorrentAsync(torrentId, cts.Token);
+
+        Assert.That(result.Success, Is.True);
+        await _multiTracker.Received(1).ScrapeAsync(entry, torrent.InfoHash, cts.Token);
+        _multiTracker.DidNotReceive().Scrape(Arg.Any<TrackerEntry>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public async Task ScrapeAllTorrentsAsync_stops_cleanly_when_cycle_timeout_expires()
+    {
+        var torrents = Enumerable.Range(1, 20)
+            .Select(i => new Torrent
+            {
+                Id = i,
+                Name = $"Torrent {i}",
+                InfoHash = $"{i:x40}"
+            })
+            .ToList();
+        _torrentService.GetAll().Returns(torrents);
+
+        foreach (var torrent in torrents)
+        {
+            _torrentService.Get(torrent.Id).Returns(torrent);
+            _trackerEntryService.GetByTorrentId(torrent.Id).Returns(new List<TrackerEntry>
+            {
+                new()
+                {
+                    Id = torrent.Id * 10,
+                    TorrentId = torrent.Id,
+                    Url = "http://slow.tracker.invalid/announce",
+                    Enabled = true
+                }
+            });
+        }
+
+        _multiTracker.ScrapeAsync(
+                Arg.Any<TrackerEntry>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(async callInfo =>
+            {
+                var token = callInfo.ArgAt<CancellationToken>(2);
+                await Task.Delay(TimeSpan.FromSeconds(5), token);
+                return new TrackerScrapeResponse { Success = true };
+            });
+
+        _service.CycleTimeout = TimeSpan.FromMilliseconds(80);
+        var count = await _service.ScrapeAllTorrentsAsync(CancellationToken.None);
+
+        Assert.That(count, Is.LessThan(torrents.Count));
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
@@ -28,10 +29,20 @@ namespace Seedarr.Api.V1.System;
 [V1ApiController("system")]
 public class SystemController : ControllerBase
 {
+    private sealed class CachedDatabaseMetadata
+    {
+        public readonly object SyncLock = new();
+        public string EngineVersion;
+        public string MigrationVersion;
+        public DateTime MigrationCachedAtUtc;
+    }
+
     private const int DefaultTaskHistoryLimit = 50;
     private const int MaxTaskHistoryLimit = 1000;
 
     private static readonly DateTime StartTime = DateTime.UtcNow;
+    private static readonly TimeSpan MigrationCacheTtl = TimeSpan.FromMinutes(5);
+    private static readonly ConditionalWeakTable<IDatabase, CachedDatabaseMetadata> DatabaseMetadataCache = new();
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     public Action<ProcessStartInfo> ProcessStarter { get; set; } = psi => Process.Start(psi); /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
@@ -161,32 +172,42 @@ public class SystemController : ControllerBase
             return string.Empty;
         }
 
-        try
+        var metadata = DatabaseMetadataCache.GetOrCreateValue(_mainDatabase);
+        lock (metadata.SyncLock)
         {
-            using var conn = _mainDatabase.OpenConnection();
-            if (conn != null)
+            if (!string.IsNullOrEmpty(metadata.EngineVersion))
             {
-                using var cmd = conn.CreateCommand();
-                if (cmd != null)
+                return metadata.EngineVersion;
+            }
+
+            try
+            {
+                using var conn = _mainDatabase.OpenConnection();
+                if (conn != null)
                 {
-                    cmd.CommandText = _mainDatabase.DatabaseType == DatabaseType.PostgreSQL
-                        ? "SHOW server_version"
-                        : "SELECT sqlite_version()";
-                    var result = cmd.ExecuteScalar();
-                    if (result != null && result != DBNull.Value)
+                    using var cmd = conn.CreateCommand();
+                    if (cmd != null)
                     {
-                        var versionStr = result.ToString();
-                        if (!string.IsNullOrWhiteSpace(versionStr))
+                        cmd.CommandText = _mainDatabase.DatabaseType == DatabaseType.PostgreSQL
+                            ? "SHOW server_version"
+                            : "SELECT sqlite_version()";
+                        var result = cmd.ExecuteScalar();
+                        if (result != null && result != DBNull.Value)
                         {
-                            return versionStr.Trim();
+                            var versionStr = result.ToString();
+                            if (!string.IsNullOrWhiteSpace(versionStr))
+                            {
+                                metadata.EngineVersion = versionStr.Trim();
+                                return metadata.EngineVersion;
+                            }
                         }
                     }
                 }
             }
-        }
-        catch
-        {
-            // Uninitialized or unreachable database
+            catch
+            {
+                // Uninitialized or unreachable database
+            }
         }
 
         return string.Empty;
@@ -196,30 +217,43 @@ public class SystemController : ControllerBase
     {
         if (_mainDatabase != null)
         {
-            try
+            var metadata = DatabaseMetadataCache.GetOrCreateValue(_mainDatabase);
+            lock (metadata.SyncLock)
             {
-                using var conn = _mainDatabase.OpenConnection();
-                if (conn != null)
+                if (!string.IsNullOrEmpty(metadata.MigrationVersion) &&
+                    (DateTime.UtcNow - metadata.MigrationCachedAtUtc) < MigrationCacheTtl)
                 {
-                    using var cmd = conn.CreateCommand();
-                    if (cmd != null)
+                    return metadata.MigrationVersion;
+                }
+
+                try
+                {
+                    using var conn = _mainDatabase.OpenConnection();
+                    if (conn != null)
                     {
-                        cmd.CommandText = "SELECT Version FROM VersionInfo ORDER BY AppliedOn DESC, Version DESC LIMIT 1";
-                        var result = cmd.ExecuteScalar();
-                        if (result != null && result != DBNull.Value)
+                        using var cmd = conn.CreateCommand();
+                        if (cmd != null)
                         {
-                            var versionStr = result.ToString();
-                            if (!string.IsNullOrWhiteSpace(versionStr))
+                            cmd.CommandText =
+                                "SELECT Version FROM VersionInfo ORDER BY AppliedOn DESC, Version DESC LIMIT 1";
+                            var result = cmd.ExecuteScalar();
+                            if (result != null && result != DBNull.Value)
                             {
-                                return versionStr;
+                                var versionStr = result.ToString();
+                                if (!string.IsNullOrWhiteSpace(versionStr))
+                                {
+                                    metadata.MigrationVersion = versionStr;
+                                    metadata.MigrationCachedAtUtc = DateTime.UtcNow;
+                                    return versionStr;
+                                }
                             }
                         }
                     }
                 }
-            }
-            catch
-            {
-                // Fall back to compile-time latest migration if query fails or database is uninitialized
+                catch
+                {
+                    // Fall back to compile-time latest migration if query fails or database is uninitialized
+                }
             }
         }
 
@@ -289,8 +323,7 @@ public class SystemController : ControllerBase
             ? taskInstance.GetType().Name
             : (t.TypeName.Contains('.') ? t.TypeName.Substring(t.TypeName.LastIndexOf('.') + 1) : t.TypeName);
 
-        var isRunning = _taskManager.IsRunning(t.TypeName) ||
-                        (t.LastStartTime.HasValue && t.LastStartTime.Value > t.LastExecution);
+        var isRunning = _taskManager.IsRunning(t.TypeName);
 
         TimeSpan? lastDuration = null;
 

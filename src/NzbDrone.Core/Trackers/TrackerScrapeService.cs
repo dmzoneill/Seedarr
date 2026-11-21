@@ -13,6 +13,9 @@ namespace NzbDrone.Core.Trackers;
 
 public class TrackerScrapeService : ITrackerScrapeService
 {
+    public static readonly TimeSpan DefaultCycleTimeout = TimeSpan.FromMinutes(8);
+    private const int MaxConcurrentTorrents = 4;
+
     private readonly IMultiTrackerManager _multiTracker;
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly ITorrentService _torrentService;
@@ -32,10 +35,12 @@ public class TrackerScrapeService : ITrackerScrapeService
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public async Task<TrackerScrapeResult> ScrapeTorrentAsync(int torrentId, CancellationToken cancellationToken = default)
-    {
-        await Task.Yield();
+    internal TimeSpan CycleTimeout { get; set; } = DefaultCycleTimeout;
 
+    public async Task<TrackerScrapeResult> ScrapeTorrentAsync(
+        int torrentId,
+        CancellationToken cancellationToken = default)
+    {
         var torrent = _torrentService.Get(torrentId);
         if (torrent == null)
         {
@@ -114,11 +119,15 @@ public class TrackerScrapeService : ITrackerScrapeService
 
             try
             {
-                response = _multiTracker.Scrape(entry, torrent.InfoHash);
+                response = await _multiTracker.ScrapeAsync(entry, torrent.InfoHash, cancellationToken);
                 if (response == null || !response.Success)
                 {
                     error = response?.FailureReason ?? "Scrape failed";
                 }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -256,28 +265,82 @@ public class TrackerScrapeService : ITrackerScrapeService
         var torrents = _torrentService.GetAll() ?? new List<Torrent>();
         _logger.Info("Starting tracker scrape for all {0} torrents", torrents.Count);
 
+        using var cycleCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (CycleTimeout > TimeSpan.Zero)
+        {
+            cycleCts.CancelAfter(CycleTimeout);
+        }
+
+        var cycleToken = cycleCts.Token;
         var scrapedCount = 0;
+        using var semaphore = new SemaphoreSlim(MaxConcurrentTorrents);
+        var tasks = new List<Task>(torrents.Count);
 
         foreach (var torrent in torrents)
         {
-            if (cancellationToken.IsCancellationRequested)
+            if (cycleToken.IsCancellationRequested)
             {
-                _logger.Info("ScrapeAllTorrentsAsync cancelled after {0} torrents", scrapedCount);
                 break;
             }
 
-            try
-            {
-                await ScrapeTorrentAsync(torrent.Id, cancellationToken);
-                scrapedCount++;
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn(ex, "Failed to scrape torrent {0} ({1}); continuing with remaining torrents", torrent.Id, torrent.Name);
-            }
+            tasks.Add(ScrapeSingleTorrentAsync(torrent));
+        }
+
+        await Task.WhenAll(tasks);
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            _logger.Info("ScrapeAllTorrentsAsync cancelled after {0} torrents", scrapedCount);
+        }
+        else if (cycleToken.IsCancellationRequested)
+        {
+            _logger.Warn(
+                "ScrapeAllTorrentsAsync reached cycle timeout ({0:N0}s) after {1} of {2} torrents",
+                CycleTimeout.TotalSeconds,
+                scrapedCount,
+                torrents.Count);
         }
 
         _logger.Info("Finished tracker scrape for {0} torrents", scrapedCount);
         return scrapedCount;
+
+        async Task ScrapeSingleTorrentAsync(Torrent torrent)
+        {
+            try
+            {
+                await semaphore.WaitAsync(cycleToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            try
+            {
+                if (cycleToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                await ScrapeTorrentAsync(torrent.Id, cycleToken);
+                Interlocked.Increment(ref scrapedCount);
+            }
+            catch (OperationCanceledException) when (cycleToken.IsCancellationRequested)
+            {
+                // Bounded cycle or caller cancellation
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(
+                    ex,
+                    "Failed to scrape torrent {0} ({1}); continuing with remaining torrents",
+                    torrent.Id,
+                    torrent.Name);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }
     }
 }

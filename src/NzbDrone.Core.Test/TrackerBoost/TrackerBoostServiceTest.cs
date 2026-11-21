@@ -765,18 +765,167 @@ public class TrackerBoostServiceTest
         Assert.That(matrix.Trackers[0].TrackerUrl, Is.EqualTo(tracker.Url));
     }
 
+    [Test]
+    public async Task InjectIntoDownloadClientsAsync_returns_success_count_from_enabled_clients()
+    {
+        const string infoHash = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd";
+        var clientDef = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            Enable = true,
+            ClientType = "QBitTorrent"
+        };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        var downloadClient = Substitute.For<IDownloadClient>();
+        downloadClient.AddTrackers(infoHash, Arg.Any<IEnumerable<string>>()).Returns(true);
+        _downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+
+        var injected = await _service.InjectIntoDownloadClientsAsync(
+            infoHash,
+            new[] { "udp://tracker.public.org:1337/announce" });
+
+        Assert.That(injected, Is.EqualTo(1));
+        downloadClient.Received(1).AddTrackers(infoHash, Arg.Any<IEnumerable<string>>());
+    }
+
+    [Test]
+    public async Task ReannounceDownloadClientsAsync_calls_enabled_clients()
+    {
+        const string infoHash = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd";
+        var clientDef = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            Enable = true,
+            ClientType = "QBitTorrent"
+        };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        var downloadClient = Substitute.For<IDownloadClient>();
+        _downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+
+        await _service.ReannounceDownloadClientsAsync(infoHash);
+
+        downloadClient.Received(1).Reannounce(infoHash);
+    }
+
+    [Test]
+    public async Task InspectTorrentTrackersAsync_skips_network_scrape_for_offline_trackers()
+    {
+        var torrent = new Torrent
+        {
+            Id = 12,
+            Name = "Public Torrent",
+            InfoHash = "1234567890abcdef1234567890abcdef12345678",
+            IsPrivate = false
+        };
+        _torrentService.Get(12).Returns(torrent);
+        _trackerEntryService.GetByTorrentId(12).Returns(new List<TrackerEntry>());
+
+        var offlineTracker = new TrackerBoostTracker
+        {
+            Id = 7,
+            Url = "http://offline.invalid:9999/announce",
+            Host = "offline.invalid",
+            Port = 9999,
+            Protocol = TrackerProtocol.Http,
+            Enabled = true,
+            Status = TrackerHealthStatus.Offline
+        };
+        _trackerRepository.All().Returns(new List<TrackerBoostTracker> { offlineTracker });
+
+        var result = await _service.InspectTorrentTrackersAsync(12);
+
+        Assert.That(result.Detections, Has.Count.EqualTo(1));
+        Assert.That(result.Detections[0].DetectionStatus, Is.EqualTo("Offline"));
+        Assert.That(result.Detections[0].IsVerified, Is.False);
+    }
+
+    [Test]
+    public async Task RunOptimizationCycleAsync_completes_when_auto_boost_exceeds_cycle_budget()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>
+        {
+            new()
+            {
+                Id = 1,
+                Name = "Slow Boost Torrent",
+                InfoHash = "1234567890abcdef1234567890abcdef12345678",
+                IsPrivate = false
+            }
+        });
+        _trackerEntryService.GetByTorrentId(1).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 1, TorrentId = 1, Url = "udp://attached.org:1337/announce", Enabled = true }
+        });
+        _trackerEntryService.All().Returns(new List<TrackerEntry>());
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>());
+
+        var previousHttpClient = TrackerBoostService.HttpClient;
+        var previousLastScanTime = TrackerBoostService.LastScanTime;
+        using var slowHandler = new FakeHttpMessageHandler(async (_, ct) =>
+        {
+            await Task.Delay(250, ct);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+        using var slowHttpClient = new HttpClient(slowHandler);
+        TrackerBoostService.HttpClient = slowHttpClient;
+        TrackerBoostService.LastScanTime = DateTime.UtcNow;
+
+        try
+        {
+            _trackerRepository.All().Returns(new List<TrackerBoostTracker>
+            {
+                new()
+                {
+                    Id = 20,
+                    Url = "http://slow.tracker.invalid/announce",
+                    Host = "slow.tracker.invalid",
+                    Port = 80,
+                    Protocol = TrackerProtocol.Http,
+                    Enabled = true,
+                    Status = TrackerHealthStatus.Alive
+                }
+            });
+
+            _configService.GetValue("TrackerBoostSettings", Arg.Any<string>())
+                .Returns("{\"autoBoostEnabled\":true,\"autoHarvestEnabled\":false}");
+
+            _service.AutoBoostCycleTimeout = TimeSpan.FromMilliseconds(50);
+
+            await _service.RunOptimizationCycleAsync(CancellationToken.None);
+
+            Assert.Pass("Cycle completed gracefully when auto-boost budget elapsed.");
+        }
+        finally
+        {
+            TrackerBoostService.HttpClient = previousHttpClient;
+            TrackerBoostService.LastScanTime = previousLastScanTime;
+        }
+    }
+
     private sealed class FakeHttpMessageHandler : HttpMessageHandler
     {
-        private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
+        private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _handler;
 
         public FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> handler)
+            : this((request, _) => Task.FromResult(handler(request)))
+        {
+        }
+
+        public FakeHttpMessageHandler(
+            Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler)
         {
             _handler = handler;
         }
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
         {
-            return Task.FromResult(_handler(request));
+            return _handler(request, cancellationToken);
         }
     }
 }

@@ -8,7 +8,7 @@ using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.TrackerBoost;
 
-public class TrackerBoostOptimizationTask : IScheduledTask, IHandle<ApplicationStartedEvent>
+public class TrackerBoostOptimizationTask : IAsyncScheduledTask, IHandle<ApplicationStartedEvent>
 {
     private readonly ITrackerBoostService _trackerBoostService;
     private readonly Logger _logger;
@@ -24,7 +24,12 @@ public class TrackerBoostOptimizationTask : IScheduledTask, IHandle<ApplicationS
 
     public void Execute(CancellationToken cancellationToken)
     {
-        RunOptimizationCycleSafelyAsync("background", cancellationToken).GetAwaiter().GetResult();
+        ExecuteAsync(cancellationToken).GetAwaiter().GetResult();
+    }
+
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        return RunOptimizationCycleSafelyAsync("background", cancellationToken);
     }
 
     public void Handle(ApplicationStartedEvent message)
@@ -32,11 +37,15 @@ public class TrackerBoostOptimizationTask : IScheduledTask, IHandle<ApplicationS
         _ = RunOptimizationCycleSafelyAsync("startup");
     }
 
-    private async Task RunOptimizationCycleSafelyAsync(string context, CancellationToken cancellationToken = default)
+    private async Task RunOptimizationCycleSafelyAsync(
+        string context,
+        CancellationToken cancellationToken = default)
     {
         if (!await _executionLock.WaitAsync(0, cancellationToken).ConfigureAwait(false))
         {
-            _logger.Debug("TrackerBoost {0} optimization cycle skipped: another execution is already in progress", context);
+            _logger.Debug(
+                "TrackerBoost {0} optimization cycle skipped: another execution is already in progress",
+                context);
             return;
         }
 
@@ -58,4 +67,3 @@ public class TrackerBoostOptimizationTask : IScheduledTask, IHandle<ApplicationS
         }
     }
 }
-

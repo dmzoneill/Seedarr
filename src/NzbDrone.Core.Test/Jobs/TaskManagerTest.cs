@@ -738,4 +738,36 @@ public class TaskManagerTest
         Assert.That(_subject.IsRunning("BackupJob"), Is.False);
         Assert.That(_subject.IsRunning("NzbDrone.Core.Backup.BackupJob"), Is.False);
     }
+
+    [Test]
+    public void GetNextScheduled_prioritizes_due_longer_interval_task_over_future_short_interval_task()
+    {
+        var now = DateTime.UtcNow;
+        var hourlyTaskDueTwentySecondsAgo = new ScheduledTask
+        {
+            Id = 8,
+            TypeName = typeof(TrackerScrapeJob).FullName,
+            Interval = 60,
+            LastExecution = now.AddMinutes(-60).AddSeconds(-20)
+        };
+        var twoMinuteTaskDueInNinetySeconds = new ScheduledTask
+        {
+            Id = 9,
+            TypeName = "NzbDrone.Core.TrackerBoost.TrackerBoostOptimizationTask",
+            Interval = 2,
+            LastExecution = now.AddSeconds(-30)
+        };
+        _repository.All().Returns(new List<ScheduledTask>
+        {
+            twoMinuteTaskDueInNinetySeconds,
+            hourlyTaskDueTwentySecondsAgo
+        });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        var result = _subject.GetNextScheduled();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TypeName, Is.EqualTo(typeof(TrackerScrapeJob).FullName));
+        Assert.That(ScheduledTask.IsSchedulerDue(result.LastExecution, result.Interval, now), Is.True);
+    }
 }

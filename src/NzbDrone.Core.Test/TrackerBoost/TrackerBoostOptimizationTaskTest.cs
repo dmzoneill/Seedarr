@@ -126,4 +126,22 @@ public class TrackerBoostOptimizationTaskTest
     {
         Assert.That(_subject.DefaultInterval, Is.EqualTo(2));
     }
+
+    [Test]
+    public async Task ExecuteAsync_awaits_optimization_cycle_without_blocking()
+    {
+        var tcs = new TaskCompletionSource<bool>();
+        _trackerBoostService.RunOptimizationCycleAsync(Arg.Any<CancellationToken>())
+            .Returns(tcs.Task);
+
+        using var cts = new CancellationTokenSource();
+        var executeTask = _subject.ExecuteAsync(cts.Token);
+
+        Assert.That(executeTask.IsCompleted, Is.False);
+
+        tcs.SetResult(true);
+        await executeTask;
+
+        await _trackerBoostService.Received(1).RunOptimizationCycleAsync(cts.Token);
+    }
 }
