@@ -431,10 +431,9 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
             if (activeWeightSum <= 0.0)
             {
-                activeWeightSum = 0;
                 foreach (var i in eligible)
                 {
-                    allocationWeights[i] = sanitizedWeights[i] > 0 ? sanitizedWeights[i] : 1.0;
+                    allocationWeights[i] = sanitizedWeights[i];
                     activeWeightSum += allocationWeights[i];
                 }
             }

@@ -43,6 +43,21 @@ public class SpeedDistributionShapeTest
     }
 
     [Test]
+    public void Zero_speed_items_receive_surplus_after_shaped_items_hit_their_cap()
+    {
+        var speeds = new long[] { 100_000, 0, 0 };
+        var weights = new double[] { 1.0, 1.0, 3.0 };
+        var caps = new long[] { 20_000L, 0L, 0L };
+
+        var result = SpeedDistributionManager.ApplyPriorityWeights(speeds, weights, caps);
+
+        Assert.That(result.Sum(), Is.EqualTo(100_000));
+        Assert.That(result[0], Is.EqualTo(20_000));
+        Assert.That(result[1], Is.EqualTo(22_560));
+        Assert.That(result[2], Is.EqualTo(57_440));
+    }
+
+    [Test]
     public void Pareto_with_equal_priorities_keeps_a_heavy_tail()
     {
         var config = Config();
