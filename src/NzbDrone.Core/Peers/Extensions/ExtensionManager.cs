@@ -88,15 +88,20 @@ public class ExtensionManager : IExtensionManager
             mDict[kvp.Key] = new BNumber(kvp.Value);
         }
 
-        var clientVersion = clientProfile?.UserAgent ?? clientProfile?.Name ?? (BuildInfo.Version != null ? $"Seedarr/{BuildInfo.Version}" : "Seedarr/1.0.0");
         var reqq = (_configService != null && _configService.PeerRequestCount > 0) ? _configService.PeerRequestCount : 250;
+        var anonymous = _configService != null && _configService.AnonymousMode;
 
         var dict = new BDictionary
         {
             ["m"] = mDict,
-            ["v"] = new BString(clientVersion),
             ["reqq"] = new BNumber(reqq)
         };
+
+        if (!anonymous)
+        {
+            var clientVersion = clientProfile?.UserAgent ?? clientProfile?.Name ?? (BuildInfo.Version != null ? $"Seedarr/{BuildInfo.Version}" : "Seedarr/1.0.0");
+            dict["v"] = new BString(clientVersion);
+        }
 
         if (listeningPort > 0)
         {

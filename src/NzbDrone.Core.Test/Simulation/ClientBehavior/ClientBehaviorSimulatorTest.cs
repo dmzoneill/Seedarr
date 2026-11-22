@@ -617,4 +617,77 @@ public class ClientBehaviorSimulatorTest
         Assert.That(session3.ProfileName, Is.Not.EqualTo(session2.ProfileName),
             "New session created after dwell cooldown may switch to alternate profile");
     }
+
+    [Test]
+    public void GetOrCreateSession_pinned_profile_keeps_the_same_peer_id_and_announce_key()
+    {
+        var profile = Substitute.For<IClientProfile>();
+        profile.Name.Returns("Transmission 3.00");
+        profile.GeneratePeerId().Returns("-TR3000-111111111111", "-TR3000-222222222222");
+
+        var infoHash = "0123456789ABCDEF0123456789ABCDEF01234567";
+        var first = _simulator.GetOrCreateSession(infoHash, isPrivateTorrent: false, pinnedProfile: profile);
+        var second = _simulator.GetOrCreateSession(infoHash, isPrivateTorrent: false, pinnedProfile: profile);
+
+        Assert.That(second, Is.SameAs(first));
+        Assert.That(second.PeerId, Is.EqualTo("-TR3000-111111111111"));
+        Assert.That(second.AnnounceKey, Is.EqualTo(first.AnnounceKey));
+        Assert.That(second.ProfileName, Is.EqualTo("Transmission 3.00"));
+    }
+
+    [Test]
+    public void GetOrCreateSession_explicit_pin_wins_over_private_primary_client_pin()
+    {
+        _configService.PrimaryClient.Returns("qBittorrent");
+        var profile = Substitute.For<IClientProfile>();
+        profile.Name.Returns("Transmission 3.00");
+        profile.GeneratePeerId().Returns("-TR3000-333333333333", "-TR3000-444444444444");
+
+        var infoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd";
+        var session = _simulator.GetOrCreateSession(infoHash, isPrivateTorrent: true, pinnedProfile: profile);
+        var again = _simulator.GetOrCreateSession(infoHash, isPrivateTorrent: true, pinnedProfile: profile);
+
+        Assert.That(session.ProfileName, Is.EqualTo("Transmission 3.00"));
+        Assert.That(again.PeerId, Is.EqualTo("-TR3000-333333333333"));
+        Assert.That(again.AnnounceKey, Is.EqualTo(session.AnnounceKey));
+    }
+
+    [Test]
+    public void GetOrCreateSession_replaces_peer_id_when_the_pinned_profile_changes_and_fills_a_missing_key()
+    {
+        var qbit = Substitute.For<IClientProfile>();
+        qbit.Name.Returns("qBittorrent 4.4.2");
+        qbit.GeneratePeerId().Returns("-qB4420-aaaaaaaaaaaa");
+
+        var transmission = Substitute.For<IClientProfile>();
+        transmission.Name.Returns("Transmission 3.00");
+        transmission.GeneratePeerId().Returns("-TR3000-bbbbbbbbbbbb", "-TR3000-cccccccccccc");
+
+        var infoHash = "1111222233334444555566667777888899990000";
+        var session = _simulator.GetOrCreateSession(infoHash, pinnedProfile: qbit);
+        session.AnnounceKey = null;
+        session.PeerId = null;
+
+        var pinned = _simulator.GetOrCreateSession(infoHash, pinnedProfile: transmission);
+        var again = _simulator.GetOrCreateSession(infoHash, pinnedProfile: transmission);
+
+        Assert.That(pinned.PeerId, Is.EqualTo("-TR3000-bbbbbbbbbbbb"));
+        Assert.That(pinned.AnnounceKey, Has.Length.EqualTo(8));
+        Assert.That(again.PeerId, Is.EqualTo(pinned.PeerId));
+        Assert.That(again.AnnounceKey, Is.EqualTo(pinned.AnnounceKey));
+    }
+
+    [Test]
+    public void GetOrCreateSession_without_info_hash_uses_the_pinned_profile()
+    {
+        var profile = Substitute.For<IClientProfile>();
+        profile.Name.Returns((string)null);
+        profile.GeneratePeerId().Returns("-DE2030-dddddddddddd");
+
+        var session = _simulator.GetOrCreateSession("  ", pinnedProfile: profile);
+
+        Assert.That(session.ProfileName, Is.EqualTo(string.Empty));
+        Assert.That(session.PeerId, Is.EqualTo("-DE2030-dddddddddddd"));
+        Assert.That(session.AnnounceKey, Has.Length.EqualTo(8));
+    }
 }

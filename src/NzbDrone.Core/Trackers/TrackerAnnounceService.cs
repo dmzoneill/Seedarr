@@ -2,10 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.Linq;
 using System.Net;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
@@ -16,7 +14,6 @@ using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Simulation.ClientBehavior;
-using NzbDrone.Core.Simulation.ClientBehavior.Profiles;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers.Metrics;
 using NzbDrone.Core.Trackers.MultiTracker;
@@ -76,6 +73,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     private readonly IPieceBoundaryMasker _pieceBoundaryMasker;
     private readonly ITorrentFileService _torrentFileService;
     private readonly ConcurrentDictionary<int, bool> _completedTorrents = new();
+    private readonly ConcurrentDictionary<string, (string PeerId, string AnnounceKey)> _ephemeralIdentities = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<int, List<List<string>>> _torrentTierOrder = new();
     private readonly ConcurrentQueue<Torrent> _staggeredQueue = new();
     private readonly object _staggeredLock = new();
@@ -398,47 +396,14 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
         var maxAnnouncedUploaded = candidateTrackers.Select(e => e.LastAnnouncedUploaded).DefaultIfEmpty(0).Max();
         var uploadedBytes = Math.Max(effectiveUploaded, maxAnnouncedUploaded);
-
-        IClientProfile profile = null;
-        TorrentClientSession session = null;
-
-        if (!string.IsNullOrWhiteSpace(torrent.ClientProfile))
-        {
-            profile = ResolveProfileByName(torrent.ClientProfile);
-        }
-
-        if (profile == null && _clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-        {
-            session = _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate);
-            profile = session?.Profile ?? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate);
-        }
-
-        if (profile == null && !string.IsNullOrWhiteSpace(_configService.BitTorrentUserAgent))
-        {
-            profile = DetectProfileFromUserAgent(_configService.BitTorrentUserAgent);
-        }
-
-        if (profile == null && _clientBehaviorSimulator != null && !_configService.AnonymousMode)
-        {
-            session = _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate);
-            profile = session?.Profile ?? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate);
-        }
-
-        if (profile == null)
-        {
-            profile = ResolveProfileByName(_configService.PrimaryClient) ?? new QBittorrentProfile();
-        }
-
-        var peerId = session?.PeerId ?? profile.GeneratePeerId();
-        var userAgent = session?.Profile?.UserAgent ?? profile.UserAgent ?? (!string.IsNullOrWhiteSpace(_configService.BitTorrentUserAgent) ? _configService.BitTorrentUserAgent : "qBittorrent/4.4.2");
-        var announceKey = session?.AnnounceKey ?? RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue).ToString("X8", CultureInfo.InvariantCulture);
+        var identity = ResolveWireIdentity(torrent);
 
         var request = new TrackerAnnounceRequest
         {
             InfoHash = torrent.InfoHash,
-            PeerId = peerId,
-            UserAgent = userAgent,
-            Key = announceKey,
+            PeerId = identity.PeerId,
+            UserAgent = identity.UserAgent,
+            Key = identity.AnnounceKey,
             Port = _configService.ListeningPort,
             Uploaded = uploadedBytes,
             Downloaded = torrent.Downloaded,
@@ -448,7 +413,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             Compact = true,
             NumWant = isStopped ? 0 : 50,
             IsPrivate = torrent.IsPrivate,
-            ClientProfile = profile,
+            ClientProfile = identity.Profile,
             LastAnnouncedUploaded = maxAnnouncedUploaded
         };
 
@@ -861,46 +826,14 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             "Tracker",
             $"Announcing to tracker: {entry.Url} (event: {eventName}, uploaded: {uploadedBytes:N0} bytes, left: {left:N0} bytes)");
 
-        IClientProfile profile = null;
-        TorrentClientSession session = null;
-
-        if (!string.IsNullOrWhiteSpace(torrent.ClientProfile))
-        {
-            profile = ResolveProfileByName(torrent.ClientProfile);
-        }
-
-        if (profile == null && _clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-        {
-            session = _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate);
-            profile = session?.Profile ?? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate);
-        }
-
-        if (profile == null && !string.IsNullOrWhiteSpace(_configService.BitTorrentUserAgent))
-        {
-            profile = DetectProfileFromUserAgent(_configService.BitTorrentUserAgent);
-        }
-
-        if (profile == null && _clientBehaviorSimulator != null && !_configService.AnonymousMode)
-        {
-            session = _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate);
-            profile = session?.Profile ?? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate);
-        }
-
-        if (profile == null)
-        {
-            profile = ResolveProfileByName(_configService.PrimaryClient) ?? new QBittorrentProfile();
-        }
-
-        var peerId = session?.PeerId ?? profile.GeneratePeerId();
-        var userAgent = session?.Profile?.UserAgent ?? profile.UserAgent ?? (!string.IsNullOrWhiteSpace(_configService.BitTorrentUserAgent) ? _configService.BitTorrentUserAgent : "qBittorrent/4.4.2");
-        var announceKey = session?.AnnounceKey ?? RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue).ToString("X8", CultureInfo.InvariantCulture);
+        var identity = ResolveWireIdentity(torrent);
 
         var request = new TrackerAnnounceRequest
         {
             InfoHash = torrent.InfoHash,
-            PeerId = peerId,
-            UserAgent = userAgent,
-            Key = announceKey,
+            PeerId = identity.PeerId,
+            UserAgent = identity.UserAgent,
+            Key = identity.AnnounceKey,
             Port = _configService.ListeningPort,
             Uploaded = uploadedBytes,
             Downloaded = torrent.Downloaded,
@@ -910,7 +843,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             Compact = true,
             NumWant = isStopped ? 0 : 50,
             IsPrivate = torrent.IsPrivate,
-            ClientProfile = profile,
+            ClientProfile = identity.Profile,
             LastAnnouncedUploaded = entry.LastAnnouncedUploaded
         };
 
@@ -1137,83 +1070,16 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         return false;
     }
 
-    private IClientProfile ResolveProfileByName(string clientName)
+    private TorrentWireIdentity ResolveWireIdentity(Torrent torrent)
     {
-        if (string.IsNullOrWhiteSpace(clientName))
-        {
-            return null;
-        }
-
-        var name = clientName.Trim().ToLowerInvariant();
-
-        if (_clientProfileFactory != null)
-        {
-            try
-            {
-                var available = _clientProfileFactory.GetAvailableProviders();
-                if (available != null)
-                {
-                    var match = available.FirstOrDefault(p =>
-                        p.Name.Equals(clientName, StringComparison.OrdinalIgnoreCase) ||
-                        p.GetType().Name.StartsWith(clientName, StringComparison.OrdinalIgnoreCase) ||
-                        p.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
-                    if (match != null)
-                    {
-                        return match;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex, "Failed to get available providers from ClientProfileFactory");
-            }
-        }
-
-        return name switch
-        {
-            var s when s.Contains("transmission") => new TransmissionProfile(),
-            var s when s.Contains("deluge") => new DelugeProfile(),
-            var s when s.Contains("utorrent") || s.Contains("µtorrent") => new UTorrentProfile(),
-            var s when s.Contains("biglybt") => new BiglyBTProfile(),
-            var s when s.Contains("qbittorrent") => new QBittorrentProfile(),
-            _ => null
-        };
-    }
-
-    private IClientProfile DetectProfileFromUserAgent(string userAgent)
-    {
-        if (string.IsNullOrWhiteSpace(userAgent))
-        {
-            return null;
-        }
-
-        var ua = userAgent.ToLowerInvariant();
-        if (ua.Contains("transmission"))
-        {
-            return ResolveProfileByName("Transmission") ?? new TransmissionProfile();
-        }
-
-        if (ua.Contains("deluge"))
-        {
-            return ResolveProfileByName("Deluge") ?? new DelugeProfile();
-        }
-
-        if (ua.Contains("utorrent") || ua.Contains("µtorrent"))
-        {
-            return ResolveProfileByName("uTorrent") ?? new UTorrentProfile();
-        }
-
-        if (ua.Contains("biglybt"))
-        {
-            return ResolveProfileByName("BiglyBT") ?? new BiglyBTProfile();
-        }
-
-        if (ua.Contains("qbittorrent"))
-        {
-            return ResolveProfileByName("qBittorrent") ?? new QBittorrentProfile();
-        }
-
-        return null;
+        return TorrentWireIdentityResolver.Resolve(
+            torrent?.InfoHash,
+            torrent?.IsPrivate ?? false,
+            torrent?.ClientProfile,
+            _configService,
+            _clientBehaviorSimulator,
+            _clientProfileFactory,
+            _ephemeralIdentities);
     }
 
     public static double CalculateJitteredInterval(double interval, int minInterval = 0, double? jitterFraction = null)

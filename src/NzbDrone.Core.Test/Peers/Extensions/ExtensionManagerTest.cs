@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Text;
 using BencodeNET.Objects;
 using BencodeNET.Parsing;
 using NSubstitute;
@@ -170,6 +171,26 @@ public class ExtensionManagerTest
         _configService.ExtensionFastExtension.Returns(true);
 
         Assert.That(_manager.FastExtensionEnabled, Is.True);
+    }
+
+    [Test]
+    public void BuildExtensionHandshake_omits_v_in_anonymous_mode()
+    {
+        _configService.AnonymousMode.Returns(true);
+        var profile = Substitute.For<IClientProfile>();
+        profile.UserAgent.Returns("Transmission/3.00");
+        profile.Name.Returns("Transmission 3.00");
+
+        var withProfileBytes = _manager.BuildExtensionHandshake(false, profile);
+        var withoutProfileBytes = _manager.BuildExtensionHandshake();
+        var withProfile = ParseBencode(withProfileBytes);
+        var withoutProfile = ParseBencode(withoutProfileBytes);
+
+        Assert.That(withProfile.ContainsKey("v"), Is.False);
+        Assert.That(withoutProfile.ContainsKey("v"), Is.False);
+        Assert.That(withProfile.ContainsKey("m"), Is.True);
+        Assert.That(Encoding.ASCII.GetString(withProfileBytes), Does.Not.Contain("Seedarr"));
+        Assert.That(Encoding.ASCII.GetString(withoutProfileBytes), Does.Not.Contain("Transmission"));
     }
 
     [Test]

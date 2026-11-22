@@ -4850,4 +4850,60 @@ public class PeerServerTest
         Assert.That(conn.IsDisposed, Is.True);
         Assert.That(conn.IsConnected, Is.False);
     }
+
+    [Test]
+    public void ResolveHandshakeIdentity_matches_announce_peer_id_for_per_torrent_profile_and_anonymous_mode()
+    {
+        var factory = Substitute.For<NzbDrone.Core.Simulation.ClientBehavior.IClientProfileFactory>();
+        factory.GetAvailableProviders().Returns(new List<NzbDrone.Core.Simulation.ClientBehavior.IClientProfile>());
+        _configService.ClientBehaviorEngineEnabled.Returns(false);
+        _configService.AnonymousMode.Returns(true);
+        _configService.PrimaryClient.Returns("qBittorrent");
+
+        var simulator = new NzbDrone.Core.Simulation.ClientBehavior.ClientBehaviorSimulator(_configService, factory);
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            clientBehaviorSimulator: simulator,
+            clientProfileFactory: factory);
+
+        var torrent = new Torrent
+        {
+            Id = 9,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            ClientProfile = "Deluge",
+            IsPrivate = false
+        };
+
+        var method = typeof(PeerServer).GetMethod("ResolveHandshakeIdentity", BindingFlags.NonPublic | BindingFlags.Instance);
+        var first = (NzbDrone.Core.Simulation.ClientBehavior.TorrentWireIdentity)method.Invoke(server, new object[] { torrent });
+        var second = (NzbDrone.Core.Simulation.ClientBehavior.TorrentWireIdentity)method.Invoke(server, new object[] { torrent });
+
+        var announced = NzbDrone.Core.Simulation.ClientBehavior.TorrentWireIdentityResolver.Resolve(
+            torrent.InfoHash,
+            torrent.IsPrivate,
+            torrent.ClientProfile,
+            _configService,
+            simulator,
+            factory,
+            new ConcurrentDictionary<string, (string PeerId, string AnnounceKey)>());
+
+        Assert.That(first.PeerId, Is.EqualTo(second.PeerId));
+        Assert.That(first.AnnounceKey, Is.EqualTo(second.AnnounceKey));
+        Assert.That(first.PeerId, Is.EqualTo(announced.PeerId));
+        Assert.That(first.AnnounceKey, Is.EqualTo(announced.AnnounceKey));
+        Assert.That(first.PeerId, Does.StartWith("-DE2030-"));
+        Assert.That(first.PeerId, Is.Not.EqualTo("-SD1000-000000000000"));
+        Assert.That(first.PeerId, Has.Length.EqualTo(20));
+        Assert.That(first.Profile.Name, Does.Contain("Deluge"));
+
+        var handshake = PeerConnection.BuildHandshake(torrent.InfoHash, first.PeerId, torrent.IsPrivate, first.Profile);
+        var handshakePeerId = Encoding.ASCII.GetString(handshake, 48, 20);
+        Assert.That(handshakePeerId, Is.EqualTo(first.PeerId));
+
+        server.Dispose();
+    }
 }
