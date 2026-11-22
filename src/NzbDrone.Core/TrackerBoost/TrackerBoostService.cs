@@ -19,6 +19,7 @@ using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Indexers;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.TrackerBoost;
@@ -53,9 +54,10 @@ public interface ITrackerBoostService
     Task RunOptimizationCycleAsync(CancellationToken cancellationToken = default);
 }
 
-public class TrackerBoostService : ITrackerBoostService
+public class TrackerBoostService : ITrackerBoostService, IHandle<TorrentDeletedEvent>
 {
     private const int MaxLogEntries = 500;
+    public const int MaxBoostHistoryEntries = 10000;
 
     private static readonly HttpClient DefaultHttpClient = new(new HttpClientHandler
     {
@@ -69,6 +71,7 @@ public class TrackerBoostService : ITrackerBoostService
 
     internal static HttpClient HttpClient { get; set; } = DefaultHttpClient;
     private static readonly BencodeParser BParser = new();
+    public static readonly TimeSpan BoostHistoryTtl = TimeSpan.FromDays(7);
     private static readonly ConcurrentDictionary<string, (DateTime BoostedAt, ImmutableHashSet<string> InjectedTrackers)> BoostHistory = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentQueue<TrackerBoostLogEntry> LogBuffer = new();
 
@@ -156,6 +159,56 @@ public class TrackerBoostService : ITrackerBoostService
     public static bool TryGetBoostHistory(string infoHash, out (DateTime BoostedAt, ImmutableHashSet<string> InjectedTrackers) history)
     {
         return BoostHistory.TryGetValue(infoHash, out history);
+    }
+
+    public static bool RemoveBoostHistory(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        return BoostHistory.TryRemove(infoHash, out _);
+    }
+
+    public static int PruneBoostHistory(DateTime utcNow, TimeSpan? maxAge = null, int? maxEntries = null)
+    {
+        var age = maxAge ?? BoostHistoryTtl;
+        var cap = maxEntries ?? MaxBoostHistoryEntries;
+        var removed = 0;
+
+        foreach (var entry in BoostHistory)
+        {
+            if (utcNow - entry.Value.BoostedAt > age && BoostHistory.TryRemove(entry.Key, out _))
+            {
+                removed++;
+            }
+        }
+
+        if (BoostHistory.Count <= cap)
+        {
+            return removed;
+        }
+
+        foreach (var key in BoostHistory.OrderBy(entry => entry.Value.BoostedAt).Select(entry => entry.Key).ToList())
+        {
+            if (BoostHistory.Count <= cap)
+            {
+                break;
+            }
+
+            if (BoostHistory.TryRemove(key, out _))
+            {
+                removed++;
+            }
+        }
+
+        return removed;
+    }
+
+    public void Handle(TorrentDeletedEvent message)
+    {
+        RemoveBoostHistory(message?.Torrent?.InfoHash);
     }
 
     public static void ResetMetricsAndHistory()
@@ -2033,6 +2086,12 @@ public class TrackerBoostService : ITrackerBoostService
     public async Task RunOptimizationCycleAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var pruned = PruneBoostHistory(_clock.UtcNow);
+        if (pruned > 0)
+        {
+            _logger.Debug("Pruned {0} tracker boost history entries", pruned);
+        }
+
         LogActivity("Info", "Cycle", "Background tracker optimization cycle started");
 
         await RecoverMissingTrackersAsync(cancellationToken);

@@ -123,6 +123,42 @@ public class TrackerBoostServiceTest
     }
 
     [Test]
+    public void RemoveBoostHistory_forgets_a_deleted_info_hash()
+    {
+        const string infoHash = "abcabcabcabcabcabcabcabcabcabcabcabcabca";
+        const string otherHash = "defdefdefdefdefdefdefdefdefdefdefdefdefd";
+        TrackerBoostService.RecordBoostHistory(infoHash, new[] { "udp://tracker.org:1337/announce" });
+        TrackerBoostService.RecordBoostHistory(otherHash, new[] { "udp://other.org:1337/announce" });
+
+        _service.Handle(new TorrentDeletedEvent(9, new Torrent { Id = 9, InfoHash = infoHash }));
+
+        Assert.That(TrackerBoostService.TryGetBoostHistory(infoHash, out _), Is.False);
+        Assert.That(TrackerBoostService.TryGetBoostHistory(otherHash, out _), Is.True);
+    }
+
+    [Test]
+    public void PruneBoostHistory_drops_expired_entries_and_enforces_a_cap()
+    {
+        TrackerBoostService.RecordBoostHistory("1111111111111111111111111111111111111111", new[] { "udp://a.org:1337/announce" });
+        TrackerBoostService.RecordBoostHistory("2222222222222222222222222222222222222222", new[] { "udp://b.org:1337/announce" });
+        TrackerBoostService.RecordBoostHistory("3333333333333333333333333333333333333333", new[] { "udp://c.org:1337/announce" });
+
+        var removedByAge = TrackerBoostService.PruneBoostHistory(DateTime.UtcNow.AddDays(8));
+        Assert.That(removedByAge, Is.EqualTo(3));
+        Assert.That(TrackerBoostService.TryGetBoostHistory("1111111111111111111111111111111111111111", out _), Is.False);
+
+        TrackerBoostService.RecordBoostHistory("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", new[] { "udp://a.org:1337/announce" });
+        TrackerBoostService.RecordBoostHistory("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", new[] { "udp://b.org:1337/announce" });
+        TrackerBoostService.RecordBoostHistory("cccccccccccccccccccccccccccccccccccccccc", new[] { "udp://c.org:1337/announce" });
+
+        var removedByCap = TrackerBoostService.PruneBoostHistory(DateTime.UtcNow, TimeSpan.FromDays(7), maxEntries: 2);
+        Assert.That(removedByCap, Is.EqualTo(1));
+        Assert.That(TrackerBoostService.TryGetBoostHistory("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", out _)
+            || TrackerBoostService.TryGetBoostHistory("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", out _)
+            || TrackerBoostService.TryGetBoostHistory("cccccccccccccccccccccccccccccccccccccccc", out _), Is.True);
+    }
+
+    [Test]
     public void ResetMetricsAndHistory_clears_metrics_and_history()
     {
         const string infoHash = "aaaabbbbccccddddeeeeffff0000111122223333";
