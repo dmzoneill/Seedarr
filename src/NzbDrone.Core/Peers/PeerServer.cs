@@ -32,6 +32,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
 {
     private const int OutgoingConnectTimeoutMs = 5000;
     private const int UnauthenticatedHandshakeTimeoutMs = 5000;
+    private static readonly long TorrentMissTtlTicks = TimeSpan.FromSeconds(30).Ticks;
     private readonly IConfigService _configService;
     private readonly ITorrentService _torrentService;
     private readonly ITrackerEntryService _trackerEntryService;
@@ -65,6 +66,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte> _inFlightOutgoingEndpoints = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Torrent> _torrentCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, long> _torrentMissUntil = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte[]> _metadataCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, SwarmPieceHistogram> _swarmHistograms = new(StringComparer.OrdinalIgnoreCase);
     private readonly ISuperSeedingTracker _superSeedingTracker;
@@ -472,6 +474,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
         if (!string.IsNullOrEmpty(message?.Torrent?.InfoHash))
         {
             _torrentCache[message.Torrent.InfoHash] = message.Torrent;
+            _torrentMissUntil.TryRemove(message.Torrent.InfoHash, out _);
             _mseSkeyRegistry?.RegisterTorrent(message.Torrent);
         }
     }
@@ -481,6 +484,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
         if (!string.IsNullOrEmpty(message?.Torrent?.InfoHash))
         {
             _torrentCache[message.Torrent.InfoHash] = message.Torrent;
+            _torrentMissUntil.TryRemove(message.Torrent.InfoHash, out _);
             _mseSkeyRegistry?.RegisterTorrent(message.Torrent);
 
             if (message.Torrent.Progress >= 1.0 || message.Torrent.Status == TorrentStatus.Seeding)
@@ -2858,37 +2862,9 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
             return true;
         }
 
-        if (_torrentService != null)
-        {
-            try
-            {
-                var torrents = _torrentService.GetAll();
-                if (torrents != null)
-                {
-                    matchedTorrent = torrents.FirstOrDefault(t =>
-                        !string.IsNullOrEmpty(t.InfoHash) &&
-                        MseKeyDerivation.DeriveKey(Convert.FromHexString(t.InfoHash.Trim()), System.Text.Encoding.ASCII.GetBytes("req2"))
-                            .AsSpan().SequenceEqual(skeyHash));
-
-                    if (matchedTorrent != null)
-                    {
-                        _mseSkeyRegistry?.RegisterTorrent(matchedTorrent);
-                        if (connection != null)
-                        {
-                            connection.InfoHash = matchedTorrent.InfoHash;
-                            connection.MatchedTorrent = matchedTorrent;
-                        }
-
-                        return true;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn(ex, "Failed to validate info hash against torrent service");
-            }
-        }
-
+        // The registry is filled from GetAll at startup and kept current by torrent events.
+        // An unknown SKEY is not in the library; scanning every torrent per handshake only
+        // burns CPU and a half-open slot.
         return false;
     }
 
@@ -2918,25 +2894,31 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
             return cachedTorrent;
         }
 
-        var torrent = _torrentService.GetByInfoHash(infoHash);
-        if (torrent == null)
+        if (_torrentMissUntil.TryGetValue(infoHash, out var missUntil) && missUntil > DateTime.UtcNow.Ticks)
         {
-            try
-            {
-                torrent = _torrentService.GetAll()?.FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
-            }
-            catch (Exception ex)
-            {
-                _logger.Trace(ex, "Failed to retrieve all torrents to lookup info hash {0}", infoHash);
-            }
+            return null;
+        }
+
+        Torrent torrent;
+        try
+        {
+            torrent = _torrentService.GetByInfoHash(infoHash);
+        }
+        catch (Exception ex)
+        {
+            _logger.Trace(ex, "Failed to look up torrent {0}", infoHash);
+            return null;
         }
 
         if (torrent != null)
         {
             _torrentCache[infoHash] = torrent;
+            _torrentMissUntil.TryRemove(infoHash, out _);
+            return torrent;
         }
 
-        return torrent;
+        _torrentMissUntil[infoHash] = DateTime.UtcNow.Ticks + TorrentMissTtlTicks;
+        return null;
     }
 
     internal void HandleMessage(PeerConnection connection, PeerMessage message, Torrent torrent = null)
