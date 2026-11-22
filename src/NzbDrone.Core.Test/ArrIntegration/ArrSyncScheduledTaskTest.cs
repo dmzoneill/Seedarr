@@ -118,4 +118,18 @@ public class ArrSyncScheduledTaskTest
 
         _arrSyncService.Received(1).Sync(cts.Token);
     }
+
+    [Test]
+    public void Execute_rethrows_when_sync_is_cancelled()
+    {
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+        {
+            new() { Enable = true, SyncEnabled = true }
+        });
+        _arrSyncService
+            .When(s => s.Sync(Arg.Any<CancellationToken>()))
+            .Do(_ => throw new OperationCanceledException("cancelled"));
+
+        Assert.Throws<OperationCanceledException>(() => _task.Execute(CancellationToken.None));
+    }
 }

@@ -227,5 +227,75 @@ namespace NzbDrone.Core.Test.ArrIntegration
             _downloadHistoryRepository.Received(1).Update(Arg.Is<DownloadHistory>(h => h.Id == 1 && h.DataJson.Contains("Show 1")));
             _downloadHistoryRepository.Received(1).Update(Arg.Is<DownloadHistory>(h => h.Id == 2 && h.DataJson.Contains("Show 2")));
         }
+
+        [Test]
+        public void PreFetch_and_history_lookup_propagate_cancellation()
+        {
+            var provider = Substitute.For<IArrConnection>();
+            provider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>())
+                .Returns<Task<List<ArrDownloadRecord>>>(_ => throw new OperationCanceledException("history"));
+            var service = CreateService(provider);
+
+            Assert.Throws<OperationCanceledException>(() => service.PreFetchDownloadHistories());
+
+            _downloadHistoryRepository.Get(1).Returns(new DownloadHistory { Id = 1, InfoHash = "abc", Title = "Show.S01E01" });
+            Assert.Throws<OperationCanceledException>(() => service.EnrichHistoryEntry(1));
+        }
+
+        [Test]
+        public void EnrichHistoryEntry_fetches_media_details_for_a_matching_hash()
+        {
+            var provider = Substitute.For<IArrConnection>();
+            provider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>()).Returns(new List<ArrDownloadRecord>
+            {
+                new() { InfoHash = "ABC", MediaId = 9, Title = "Show" }
+            });
+            provider.GetMediaDetailsAsync(9, Arg.Any<CancellationToken>()).Returns(new MediaMetadata { Title = "Show", MediaId = 9 });
+            _downloadHistoryRepository.Get(1).Returns(new DownloadHistory { Id = 1, InfoHash = "abc", Title = "Show" });
+
+            var metadata = CreateService(provider).EnrichHistoryEntry(1);
+
+            Assert.That(metadata.Title, Is.EqualTo("Show"));
+            _downloadHistoryRepository.Received().Update(Arg.Is<DownloadHistory>(h => h.DataJson.Contains("Show")));
+        }
+
+        [Test]
+        public void LookupAndEnrichByTitle_uses_async_lookup_and_propagates_cancellation()
+        {
+            var provider = Substitute.For<IArrConnection>();
+            provider.LookupMediaAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new MediaMetadata { Title = "Show" });
+            var history = new DownloadHistory { Id = 4, Title = "Show.S01E01.1080p" };
+            _downloadHistoryRepository.Get(4).Returns(history);
+            provider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>()).Returns(new List<ArrDownloadRecord>());
+
+            var metadata = CreateService(provider).EnrichHistoryEntry(4);
+
+            Assert.That(metadata.Title, Is.EqualTo("Show"));
+
+            provider.LookupMediaAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns<Task<MediaMetadata>>(_ => throw new OperationCanceledException("lookup"));
+            Assert.Throws<OperationCanceledException>(() => CreateService(provider).LookupAndEnrichByTitle(history));
+        }
+
+        [Test]
+        public void FetchMetadataForRecord_propagates_cancellation()
+        {
+            var provider = Substitute.For<IArrConnection>();
+            provider.GetMediaDetailsAsync(9, Arg.Any<CancellationToken>())
+                .Returns<Task<MediaMetadata>>(_ => throw new OperationCanceledException("details"));
+
+            Assert.Throws<OperationCanceledException>(() => CreateService(provider).FetchMetadataForRecord(
+                new ArrDownloadRecord { Title = "Show", MediaId = 9 },
+                new ArrConnectionDefinition { Id = 1, Enable = true, ArrType = "Sonarr", Name = "S" }));
+        }
+
+        private ArrMetadataEnricherService CreateService(IArrConnection provider)
+        {
+            _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+            {
+                new() { Id = 1, Enable = true, ArrType = "Sonarr", Name = "S", Url = "http://sonarr" }
+            });
+            return new ArrMetadataEnricherService(_connectionFactory, _downloadHistoryRepository, providerFactory: _ => provider);
+        }
     }
 }
