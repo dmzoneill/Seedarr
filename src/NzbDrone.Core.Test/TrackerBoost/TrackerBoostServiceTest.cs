@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Indexers;
@@ -134,6 +135,47 @@ public class TrackerBoostServiceTest
 
         Assert.That(TrackerBoostService.TryGetBoostHistory(infoHash, out _), Is.False);
         Assert.That(TrackerBoostService.TryGetBoostHistory(otherHash, out _), Is.True);
+    }
+
+    [Test]
+    public void RemoveBoostHistory_ignores_a_blank_info_hash()
+    {
+        Assert.That(TrackerBoostService.RemoveBoostHistory(null), Is.False);
+        Assert.That(TrackerBoostService.RemoveBoostHistory("   "), Is.False);
+        Assert.DoesNotThrow(() => _service.Handle(new TorrentDeletedEvent(1, null)));
+        Assert.DoesNotThrow(() => _service.Handle(null));
+    }
+
+    [Test]
+    public async Task RunOptimizationCycleAsync_prunes_expired_boost_history()
+    {
+        const string infoHash = "9999999999999999999999999999999999999999";
+        TrackerBoostService.RecordBoostHistory(infoHash, new[] { "udp://old.example:1337/announce" });
+
+        var clock = Substitute.For<ISystemClock>();
+        clock.UtcNow.Returns(DateTime.UtcNow.AddDays(8));
+        var trackerRepository = Substitute.For<ITrackerBoostTrackerRepository>();
+        var torrentService = Substitute.For<ITorrentService>();
+        var trackerEntryService = Substitute.For<ITrackerEntryService>();
+        var indexerRepository = Substitute.For<IIndexerRepository>();
+        var downloadClientFactory = Substitute.For<IDownloadClientFactory>();
+        var configService = Substitute.For<IConfigService>();
+        trackerRepository.All().Returns(new List<TrackerBoostTracker>());
+        torrentService.GetAll().Returns(new List<Torrent>());
+        downloadClientFactory.All().Returns(new List<DownloadClientDefinition>());
+
+        var service = new TrackerBoostService(
+            trackerRepository,
+            torrentService,
+            trackerEntryService,
+            indexerRepository,
+            downloadClientFactory,
+            configService,
+            clock: clock);
+
+        await service.RunOptimizationCycleAsync();
+
+        Assert.That(TrackerBoostService.TryGetBoostHistory(infoHash, out _), Is.False);
     }
 
     [Test]
