@@ -324,6 +324,40 @@ public class TrackerServerTest
     }
 
     [Test]
+    public void ExcludeHiddenLoopback_hides_loopback_peers_from_remote_requesters()
+    {
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "127.0.0.1", Port = 51413 },
+            new TrackerPeerEntry { Ip = "::1", Port = 51413 },
+            new TrackerPeerEntry { Ip = "10.1.2.3", Port = 6881 },
+            new TrackerPeerEntry { Ip = "2001:db8::10", Port = 6881 }
+        };
+
+        var remote = TrackerPeerVisibility.ExcludeHiddenLoopback(peers, "203.0.113.8");
+        var local = TrackerPeerVisibility.ExcludeHiddenLoopback(peers, "127.0.0.1");
+        var localV6 = TrackerPeerVisibility.ExcludeHiddenLoopback(peers, "::1");
+        var unchanged = TrackerPeerVisibility.ExcludeHiddenLoopback(new List<TrackerPeerEntry> { peers[2] }, "203.0.113.8");
+        var empty = TrackerPeerVisibility.ExcludeHiddenLoopback(null, "203.0.113.8");
+        var unknownRequester = TrackerPeerVisibility.ExcludeHiddenLoopback(peers, "not-an-ip");
+
+        Assert.That(remote.Select(p => p.Ip), Is.EqualTo(new[] { "10.1.2.3", "2001:db8::10" }));
+        Assert.That(unknownRequester.Select(p => p.Ip), Is.EqualTo(new[] { "10.1.2.3", "2001:db8::10" }));
+        Assert.That(local.Select(p => p.Ip), Does.Contain("127.0.0.1"));
+        Assert.That(localV6.Select(p => p.Ip), Does.Contain("::1"));
+        Assert.That(unchanged, Has.Count.EqualTo(1));
+        Assert.That(empty, Is.Empty);
+
+        var compact = InvokeBuildCompactPeers(remote, "203.0.113.8", 1234, 50);
+        var dictionary = InvokeBuildDictionaryPeers(remote, "203.0.113.8", 1234, 50);
+        Assert.That(compact, Has.Length.EqualTo(6));
+        Assert.That(compact[0], Is.EqualTo(10));
+        Assert.That(dictionary, Has.Count.EqualTo(2));
+        Assert.That(((BString)((BDictionary)dictionary[0])["ip"]).ToString(), Is.EqualTo("10.1.2.3"));
+        Assert.That(((BString)((BDictionary)dictionary[1])["ip"]).ToString(), Is.EqualTo("2001:db8::10"));
+    }
+
+    [Test]
     public void BuildCompactPeers_should_not_exclude_same_ip_different_port()
     {
         var peers = new List<TrackerPeerEntry>

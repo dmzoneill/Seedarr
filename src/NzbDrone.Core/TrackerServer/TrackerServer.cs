@@ -734,7 +734,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
             _trackerUserService.RecordAnnounce(passkey, uploadedDelta, downloadedDelta);
         }
 
-        var peers = _peerDatabase.GetPeers(infoHash);
+        var peers = TrackerPeerVisibility.ExcludeHiddenLoopback(_peerDatabase.GetPeers(infoHash), peerIp);
         var interval = _configService.TrackerAnnounceInterval;
         var maxPeers = _configService.TrackerMaxPeersPerAnnounce;
 
