@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Torrents;
@@ -31,7 +33,7 @@ namespace NzbDrone.Core.ArrIntegration
             _logger = LogManager.GetCurrentClassLogger();
         }
 
-        public Dictionary<string, ArrHistoryRecord> PreFetchDownloadHistories()
+        public Dictionary<string, ArrHistoryRecord> PreFetchDownloadHistories(CancellationToken cancellationToken = default)
         {
             var cache = new Dictionary<string, ArrHistoryRecord>(StringComparer.OrdinalIgnoreCase);
             var definitions = _connectionFactory?.All();
@@ -42,6 +44,7 @@ namespace NzbDrone.Core.ArrIntegration
 
             foreach (var def in definitions)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (!def.Enable)
                 {
                     continue;
@@ -55,11 +58,12 @@ namespace NzbDrone.Core.ArrIntegration
 
                 try
                 {
-                    var records = provider.GetDownloadHistory();
+                    var records = provider.GetDownloadHistoryAsync(cancellationToken).GetAwaiter().GetResult();
                     if (records != null)
                     {
                         foreach (var rec in records)
                         {
+                            cancellationToken.ThrowIfCancellationRequested();
                             if (!string.IsNullOrWhiteSpace(rec.InfoHash))
                             {
                                 var normalized = rec.InfoHash.Trim().ToLowerInvariant();
@@ -67,6 +71,10 @@ namespace NzbDrone.Core.ArrIntegration
                             }
                         }
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -82,7 +90,8 @@ namespace NzbDrone.Core.ArrIntegration
 
         public MediaMetadata EnrichHistoryEntry(
             int historyId,
-            IReadOnlyDictionary<string, ArrHistoryRecord> cachedHistories)
+            IReadOnlyDictionary<string, ArrHistoryRecord> cachedHistories,
+            CancellationToken cancellationToken = default)
         {
             var history = _downloadHistoryRepository.Get(historyId);
             if (history == null)
@@ -97,7 +106,7 @@ namespace NzbDrone.Core.ArrIntegration
                     var normalized = history.InfoHash.Trim().ToLowerInvariant();
                     if (cachedHistories.TryGetValue(normalized, out var match) && match != null)
                     {
-                        var metadata = FetchMetadataForRecord(match.Record, match.Definition);
+                        var metadata = FetchMetadataForRecord(match.Record, match.Definition, cancellationToken);
                         if (metadata != null)
                         {
                             history.DataJson = JsonSerializer.Serialize(metadata);
@@ -112,7 +121,7 @@ namespace NzbDrone.Core.ArrIntegration
                     }
                 }
 
-                return LookupAndEnrichByTitle(history);
+                return LookupAndEnrichByTitle(history, cancellationToken);
             }
 
             var definitions = _connectionFactory.All();
@@ -120,6 +129,7 @@ namespace NzbDrone.Core.ArrIntegration
             // Step 1: Query connected Arr download history for matching info_hash
             foreach (var def in definitions)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (!def.Enable)
                 {
                     continue;
@@ -133,12 +143,14 @@ namespace NzbDrone.Core.ArrIntegration
 
                 try
                 {
-                    var records = provider.GetDownloadHistory();
+                    var records = provider.GetDownloadHistoryAsync(cancellationToken).GetAwaiter().GetResult()
+                        ?? new List<ArrDownloadRecord>();
                     foreach (var rec in records)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         if (string.Equals(rec.InfoHash, history.InfoHash, StringComparison.OrdinalIgnoreCase))
                         {
-                            var metadata = FetchMetadataForRecord(rec, def);
+                            var metadata = FetchMetadataForRecord(rec, def, cancellationToken);
                             if (metadata != null)
                             {
                                 history.DataJson = JsonSerializer.Serialize(metadata);
@@ -153,6 +165,10 @@ namespace NzbDrone.Core.ArrIntegration
                         }
                     }
                 }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     _logger.Warn(ex, "Failed to query {0} during metadata enrichment for history {1}", def.Name, historyId);
@@ -160,10 +176,10 @@ namespace NzbDrone.Core.ArrIntegration
             }
 
             // Step 2: Fallback to smart title-based lookup on Sonarr, Radarr, or Lidarr
-            return LookupAndEnrichByTitle(history);
+            return LookupAndEnrichByTitle(history, cancellationToken);
         }
 
-        public MediaMetadata LookupAndEnrichByTitle(DownloadHistory history)
+        public MediaMetadata LookupAndEnrichByTitle(DownloadHistory history, CancellationToken cancellationToken = default)
         {
             if (history == null || string.IsNullOrWhiteSpace(history.Title))
             {
@@ -180,6 +196,7 @@ namespace NzbDrone.Core.ArrIntegration
 
             foreach (var def in definitions)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var provider = CreateProvider(def);
                 if (provider == null)
                 {
@@ -188,7 +205,7 @@ namespace NzbDrone.Core.ArrIntegration
 
                 try
                 {
-                    var metadata = provider.LookupMedia(cleanTitle);
+                    var metadata = provider.LookupMediaAsync(cleanTitle, cancellationToken).GetAwaiter().GetResult();
                     if (metadata != null)
                     {
                         history.DataJson = JsonSerializer.Serialize(metadata);
@@ -202,6 +219,10 @@ namespace NzbDrone.Core.ArrIntegration
                         return metadata;
                     }
                 }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     _logger.Debug(ex, "Title lookup on {0} for '{1}' failed", def.Name, cleanTitle);
@@ -211,7 +232,7 @@ namespace NzbDrone.Core.ArrIntegration
             return null;
         }
 
-        public MediaMetadata FetchMetadataForRecord(ArrDownloadRecord record, ArrConnectionDefinition definition)
+        public MediaMetadata FetchMetadataForRecord(ArrDownloadRecord record, ArrConnectionDefinition definition, CancellationToken cancellationToken = default)
         {
             if (record == null || definition == null)
             {
@@ -237,7 +258,8 @@ namespace NzbDrone.Core.ArrIntegration
 
             try
             {
-                var metadata = provider.GetMediaDetails(record.MediaId.Value);
+                cancellationToken.ThrowIfCancellationRequested();
+                var metadata = provider.GetMediaDetailsAsync(record.MediaId.Value, cancellationToken).GetAwaiter().GetResult();
                 if (metadata != null)
                 {
                     if (string.IsNullOrEmpty(metadata.Title))
@@ -249,6 +271,10 @@ namespace NzbDrone.Core.ArrIntegration
                 }
 
                 return metadata;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {

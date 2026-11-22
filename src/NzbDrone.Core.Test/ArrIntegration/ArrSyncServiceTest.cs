@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using NUnit.Framework;
@@ -44,8 +46,17 @@ public class ArrSyncServiceTest
         IArrConnection provider,
         IDownloadHistoryService downloadHistoryService = null,
         IConfigService configService = null,
-        IRemotePathMappingService remotePathMappingService = null) =>
-        new TestableArrSyncService(_connectionFactory, _torrentService, provider, downloadHistoryService, configService, remotePathMappingService);
+        IRemotePathMappingService remotePathMappingService = null)
+    {
+        provider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                ci.Arg<CancellationToken>().ThrowIfCancellationRequested();
+                return Task.FromResult(provider.GetDownloadHistory());
+            });
+
+        return new TestableArrSyncService(_connectionFactory, _torrentService, provider, downloadHistoryService, configService, remotePathMappingService);
+    }
 
     private static ArrConnectionDefinition EnabledDefinition(string arrType = "Sonarr") =>
         new() { Enable = true, SyncEnabled = true, ArrType = arrType, Name = "Test" };
@@ -557,6 +568,39 @@ public class ArrSyncServiceTest
         _service.Sync();
 
         _connectionFactory.Received(1).All();
+    }
+
+    [Test]
+    public void Shared_arr_clients_use_a_bounded_timeout()
+    {
+        Assert.That(ArrConnectionResources.SharedClient.Timeout, Is.EqualTo(ArrConnectionResources.DefaultTimeout));
+        Assert.That(ArrConnectionResources.SharedInsecureClient.Timeout, Is.EqualTo(ArrConnectionResources.DefaultTimeout));
+        Assert.That(ArrConnectionResources.DefaultTimeout, Is.LessThanOrEqualTo(TimeSpan.FromSeconds(30)));
+    }
+
+    [Test]
+    public void Sync_stops_before_the_next_connection_when_cancelled()
+    {
+        var calls = 0;
+        var provider = Substitute.For<IArrConnection>();
+        using var cts = new CancellationTokenSource();
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+        {
+            EnabledDefinition("Sonarr"),
+            EnabledDefinition("Radarr")
+        });
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var service = CreateTestableService(provider);
+        provider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            calls++;
+            cts.Cancel();
+            return Task.FromResult(new List<ArrDownloadRecord>());
+        });
+
+        Assert.Throws<OperationCanceledException>(() => service.Sync(cts.Token));
+        Assert.That(calls, Is.EqualTo(1));
     }
 
     // --- Inner sync loop body tests (via TestableArrSyncService) ---

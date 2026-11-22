@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.ArrIntegration;
@@ -142,7 +144,7 @@ namespace NzbDrone.Core.Test.ArrIntegration
         }
 
         [Test]
-        public void EnrichAll_should_only_call_GetDownloadHistory_once_per_enabled_provider()
+        public async Task EnrichAll_should_only_call_GetDownloadHistory_once_per_enabled_provider()
         {
             var entries = new List<DownloadHistory>
             {
@@ -166,10 +168,10 @@ namespace NzbDrone.Core.Test.ArrIntegration
             _connectionFactory.All().Returns(new List<ArrConnectionDefinition> { sonarrDef, radarrDef, disabledDef });
 
             var sonarrProvider = Substitute.For<IArrConnection>();
-            sonarrProvider.GetDownloadHistory().Returns(new List<ArrDownloadRecord>());
+            sonarrProvider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>()).Returns(new List<ArrDownloadRecord>());
 
             var radarrProvider = Substitute.For<IArrConnection>();
-            radarrProvider.GetDownloadHistory().Returns(new List<ArrDownloadRecord>());
+            radarrProvider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>()).Returns(new List<ArrDownloadRecord>());
 
             var lidarrProvider = Substitute.For<IArrConnection>();
 
@@ -181,13 +183,13 @@ namespace NzbDrone.Core.Test.ArrIntegration
 
             service.EnrichAll();
 
-            sonarrProvider.Received(1).GetDownloadHistory();
-            radarrProvider.Received(1).GetDownloadHistory();
-            lidarrProvider.DidNotReceive().GetDownloadHistory();
+            await sonarrProvider.Received(1).GetDownloadHistoryAsync(Arg.Any<CancellationToken>());
+            await radarrProvider.Received(1).GetDownloadHistoryAsync(Arg.Any<CancellationToken>());
+            await lidarrProvider.DidNotReceive().GetDownloadHistoryAsync(Arg.Any<CancellationToken>());
         }
 
         [Test]
-        public void EnrichAll_should_correlate_multiple_history_entries_efficiently()
+        public async Task EnrichAll_should_correlate_multiple_history_entries_efficiently()
         {
             var entries = new List<DownloadHistory>
             {
@@ -205,13 +207,13 @@ namespace NzbDrone.Core.Test.ArrIntegration
             _connectionFactory.All().Returns(new List<ArrConnectionDefinition> { sonarrDef });
 
             var sonarrProvider = Substitute.For<IArrConnection>();
-            sonarrProvider.GetDownloadHistory().Returns(new List<ArrDownloadRecord>
+            sonarrProvider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>()).Returns(new List<ArrDownloadRecord>
             {
                 new() { InfoHash = "HASH1", MediaId = 10, Title = "Show 1" },
                 new() { InfoHash = "HASH2", MediaId = 20, Title = "Show 2" }
             });
-            sonarrProvider.GetMediaDetails(10).Returns(new MediaMetadata { Title = "Show 1", MediaId = 10 });
-            sonarrProvider.GetMediaDetails(20).Returns(new MediaMetadata { Title = "Show 2", MediaId = 20 });
+            sonarrProvider.GetMediaDetailsAsync(10, Arg.Any<CancellationToken>()).Returns(new MediaMetadata { Title = "Show 1", MediaId = 10 });
+            sonarrProvider.GetMediaDetailsAsync(20, Arg.Any<CancellationToken>()).Returns(new MediaMetadata { Title = "Show 2", MediaId = 20 });
 
             var service = new ArrMetadataEnricherService(
                 _connectionFactory,
@@ -221,7 +223,7 @@ namespace NzbDrone.Core.Test.ArrIntegration
 
             service.EnrichAll();
 
-            sonarrProvider.Received(1).GetDownloadHistory();
+            await sonarrProvider.Received(1).GetDownloadHistoryAsync(Arg.Any<CancellationToken>());
             _downloadHistoryRepository.Received(1).Update(Arg.Is<DownloadHistory>(h => h.Id == 1 && h.DataJson.Contains("Show 1")));
             _downloadHistoryRepository.Received(1).Update(Arg.Is<DownloadHistory>(h => h.Id == 2 && h.DataJson.Contains("Show 2")));
         }

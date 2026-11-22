@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DownloadClients;
@@ -11,7 +13,7 @@ namespace NzbDrone.Core.ArrIntegration;
 
 public interface IArrSyncService
 {
-    SyncResult Sync();
+    SyncResult Sync(CancellationToken cancellationToken = default);
     bool TestConnection(int id);
     bool TestConnectionDirect(ArrConnectionDefinition definition);
     ArrTestResult TestConnectionDetailed(int id);
@@ -59,7 +61,7 @@ public class ArrSyncService : IArrSyncService
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public SyncResult Sync()
+    public SyncResult Sync(CancellationToken cancellationToken = default)
     {
         var result = new SyncResult();
         var existingTorrents = _torrentService.GetAll();
@@ -73,6 +75,8 @@ public class ArrSyncService : IArrSyncService
 
         foreach (var definition in definitions)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (!definition.Enable || !definition.SyncEnabled)
             {
                 continue;
@@ -88,10 +92,12 @@ public class ArrSyncService : IArrSyncService
 
             try
             {
-                var records = provider.GetDownloadHistory();
+                var records = provider.GetDownloadHistoryAsync(cancellationToken).GetAwaiter().GetResult()
+                    ?? new List<ArrDownloadRecord>();
 
                 foreach (var record in records)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (string.IsNullOrEmpty(record.InfoHash))
                     {
                         continue;
@@ -123,7 +129,7 @@ public class ArrSyncService : IArrSyncService
                             {
                                 try
                                 {
-                                    var meta = _metadataEnricherService.FetchMetadataForRecord(record, definition);
+                                    var meta = _metadataEnricherService.FetchMetadataForRecord(record, definition, cancellationToken);
                                     if (meta != null)
                                     {
                                         hist.DataJson = System.Text.Json.JsonSerializer.Serialize(meta);
@@ -170,7 +176,7 @@ public class ArrSyncService : IArrSyncService
                             {
                                 try
                                 {
-                                    var meta = _metadataEnricherService.FetchMetadataForRecord(record, definition);
+                                    var meta = _metadataEnricherService.FetchMetadataForRecord(record, definition, cancellationToken);
                                     if (meta != null)
                                     {
                                         hist.DataJson = System.Text.Json.JsonSerializer.Serialize(meta);
@@ -255,7 +261,7 @@ public class ArrSyncService : IArrSyncService
                     {
                         try
                         {
-                            var meta = _metadataEnricherService.FetchMetadataForRecord(record, definition);
+                            var meta = _metadataEnricherService.FetchMetadataForRecord(record, definition, cancellationToken);
                             if (meta != null)
                             {
                                 var hist = _downloadHistoryService.GetByInfoHash(torrent.InfoHash);
@@ -273,6 +279,10 @@ public class ArrSyncService : IArrSyncService
                         }
                     }
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
