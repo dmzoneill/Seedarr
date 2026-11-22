@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.WebSeeds;
 
@@ -85,11 +88,13 @@ public class WebSeedRedirectHandler : IWebSeedRedirectHandler
 
         var currentRequest = request;
         var initialUri = request.RequestUri;
+        EnsureSafeWebSeedTarget(initialUri);
 
         var resolvedUrlString = GetResolvedUrl(initialUri.AbsoluteUri);
         if (!string.Equals(resolvedUrlString, initialUri.AbsoluteUri, StringComparison.OrdinalIgnoreCase))
         {
             var resolvedUri = new Uri(resolvedUrlString);
+            EnsureSafeWebSeedTarget(resolvedUri);
             currentRequest = CreateRedirectRequest(request, resolvedUri);
         }
 
@@ -126,6 +131,21 @@ public class WebSeedRedirectHandler : IWebSeedRedirectHandler
             }
 
             var targetUri = location.IsAbsoluteUri ? location : new Uri(currentRequest.RequestUri, location);
+
+            try
+            {
+                EnsureSafeWebSeedTarget(targetUri);
+            }
+            catch (InvalidOperationException)
+            {
+                response.Dispose();
+                if (currentRequest != request)
+                {
+                    currentRequest.Dispose();
+                }
+
+                throw;
+            }
 
             if (!visitedUris.Add(targetUri))
             {
@@ -187,5 +207,66 @@ public class WebSeedRedirectHandler : IWebSeedRedirectHandler
         }
 
         return newRequest;
+    }
+
+    internal static void EnsureSafeWebSeedTarget(Uri uri)
+    {
+        if (!IsAllowedWebSeedTarget(uri))
+        {
+            throw new InvalidOperationException(
+                $"SSRF guard: web seed target '{uri}' is prohibited (restricted IP, loopback, link-local, or metadata host).");
+        }
+    }
+
+    internal static bool IsAllowedWebSeedTarget(Uri uri)
+    {
+        if (uri == null || !uri.IsAbsoluteUri)
+        {
+            return false;
+        }
+
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+        {
+            return false;
+        }
+
+        var host = uri.IdnHost?.Trim().Trim('[', ']');
+        if (string.IsNullOrWhiteSpace(host) || IsDeniedWebSeedHostname(host))
+        {
+            return false;
+        }
+
+        if (IPAddress.TryParse(host, out var literal))
+        {
+            return !UrlValidator.IsPrivateIp(literal);
+        }
+
+        try
+        {
+            var addresses = Dns.GetHostAddresses(host);
+            if (addresses.Length == 0)
+            {
+                return false;
+            }
+
+            return addresses.All(address => !UrlValidator.IsPrivateIp(address));
+        }
+        catch (SocketException)
+        {
+            // No resolver. A dotted public name cannot be a literal private address.
+            // Names that resolve to private space are rejected when DNS works.
+            return host.Contains('.');
+        }
+    }
+
+    private static bool IsDeniedWebSeedHostname(string host)
+    {
+        return string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(host, "metadata.google.internal", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(host, "instance-data", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".local", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".internal", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".lan", StringComparison.OrdinalIgnoreCase);
     }
 }

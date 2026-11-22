@@ -480,6 +480,56 @@ public class WebSeedRedirectHandlerTests
         Assert.That(requestsReceived[0].Headers.Range.ToString(), Is.EqualTo("bytes=16384-32767"));
     }
 
+    [TestCase("http://127.0.0.1/latest/meta-data")]
+    [TestCase("http://127.0.0.1/")]
+    [TestCase("http://[::1]/")]
+    [TestCase("http://169.254.169.254/latest/meta-data")]
+    [TestCase("http://localhost/")]
+    [TestCase("http://metadata.google.internal/computeMetadata/v1/")]
+    [TestCase("http://instance-data/latest/meta-data")]
+    [TestCase("http://10.1.2.3/secret")]
+    [TestCase("http://192.168.1.1/")]
+    [TestCase("file:///etc/passwd")]
+    public async Task SendWithRedirectsAsync_rejects_redirect_to_restricted_target(string location)
+    {
+        var requested = new List<string>();
+        var mockHandler = new TestHttpMessageHandler((request, ct) =>
+        {
+            requested.Add(request.RequestUri.ToString());
+            var redirectResponse = new HttpResponseMessage(HttpStatusCode.MovedPermanently);
+            redirectResponse.Headers.Location = new Uri(location);
+            return Task.FromResult(redirectResponse);
+        });
+
+        using var client = new HttpClient(mockHandler);
+        using var initialRequest = new HttpRequestMessage(HttpMethod.Get, "https://source.example.com/file.iso");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _handler.SendWithRedirectsAsync(client, initialRequest));
+
+        Assert.That(ex.Message, Does.Contain("SSRF"));
+        Assert.That(requested, Is.EqualTo(new[] { "https://source.example.com/file.iso" }));
+        Assert.That(_handler.PermanentRedirects, Is.Empty);
+    }
+
+    [Test]
+    public async Task SendWithRedirectsAsync_does_not_send_an_initial_loopback_url()
+    {
+        var requested = 0;
+        var mockHandler = new TestHttpMessageHandler((request, ct) =>
+        {
+            requested++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        });
+
+        using var client = new HttpClient(mockHandler);
+        using var initialRequest = new HttpRequestMessage(HttpMethod.Get, "http://127.0.0.1/admin");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _handler.SendWithRedirectsAsync(client, initialRequest));
+
+        Assert.That(ex.Message, Does.Contain("SSRF"));
+        Assert.That(requested, Is.EqualTo(0));
+    }
+
     private static HttpRequestMessage CloneRequest(HttpRequestMessage request)
     {
         var clone = new HttpRequestMessage(request.Method, request.RequestUri);
