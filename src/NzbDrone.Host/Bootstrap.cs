@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Common.Composition;
 using NzbDrone.Common.EnvironmentInfo;
@@ -41,6 +42,7 @@ public static class Bootstrap
     public static WebApplication CreateApplication(StartupContext startupContext, string[] urls = null)
     {
         ValidateListenUrlOverrides(urls);
+        var dataFolder = ProcessRestart.PrepareForStart(startupContext);
 
         if (LogManager.Configuration == null)
         {
@@ -138,6 +140,9 @@ public static class Bootstrap
                 }
             }
         }
+
+        var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+        lifetime.ApplicationStopping.Register(() => ProcessRestart.ReleaseDataDirectoryLock(dataFolder));
 
         return app;
     }

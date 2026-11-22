@@ -768,12 +768,12 @@ public class SystemController : ControllerBase
                 if (!isContainer)
                 {
                     var processPath = Environment.ProcessPath ?? Environment.GetCommandLineArgs()[0];
-                    var startInfo = new ProcessStartInfo
-                    {
-                        FileName = processPath, /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
-                        WorkingDirectory = Environment.CurrentDirectory,
-                        UseShellExecute = false
-                    };
+                    var startInfo = ProcessRestart.CreateStartInfo(
+                        processPath, /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
+                        Environment.GetCommandLineArgs(),
+                        Environment.CurrentDirectory,
+                        Environment.ProcessId,
+                        global::System.Reflection.Assembly.GetEntryAssembly()?.Location);
 
                     _logger.Info("Restarting application: spawning new process {0}", processPath);
                     ProcessStarter(startInfo);

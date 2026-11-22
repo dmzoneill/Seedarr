@@ -169,6 +169,7 @@ public class SystemControllerTest
         Assert.That(capturedStartInfo.FileName, Is.EqualTo(expectedPath));
         Assert.That(capturedStartInfo.WorkingDirectory, Is.EqualTo(Environment.CurrentDirectory));
         Assert.That(capturedStartInfo.UseShellExecute, Is.False);
+        Assert.That(capturedStartInfo.ArgumentList, Does.Contain("--restart-wait-pid=" + Environment.ProcessId));
     }
 
     [Test]
