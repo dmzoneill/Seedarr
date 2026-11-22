@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.IO;
@@ -466,6 +467,149 @@ public class DbFactoryTest
         Assert.That(observed, Is.EqualTo("after-snapshot"));
         Assert.That(File.Exists(_tempDbPath + "-wal"), Is.True, "WAL must stay linked while this process has the database open.");
         Assert.That(File.Exists(_tempDbPath + "-shm"), Is.True, "SHM must stay linked while this process has the database open.");
+    }
+
+    [Test]
+    public void CreatePreMigrationSnapshot_removes_partial_artifacts_when_backup_fails()
+    {
+        var connectionString = $"Data Source={_tempDbPath}";
+        using (var setup = new SqliteConnection(connectionString))
+        {
+            setup.Open();
+            using var cmd = setup.CreateCommand();
+            cmd.CommandText = "PRAGMA journal_mode=WAL; CREATE TABLE Keep (Id INTEGER PRIMARY KEY); INSERT INTO Keep VALUES (1);";
+            cmd.ExecuteNonQuery();
+        }
+
+        // The snapshot name is chosen inside the method from the current second.
+        // Occupy that name with a directory so opening the destination fails after
+        // the path is selected. Retry when the clock ticks between the two reads.
+        string snapshotPath = "retry";
+        string matchedBlocker = null;
+        var blockers = new List<string>();
+        try
+        {
+            for (var attempt = 0; attempt < 5 && snapshotPath != null; attempt++)
+            {
+                var blocker = $"{_tempDbPath}.pre-migration-{DateTime.UtcNow:yyyyMMddHHmmss}.bak";
+                blockers.Add(blocker);
+                if (File.Exists(blocker))
+                {
+                    File.Delete(blocker);
+                }
+
+                if (!Directory.Exists(blocker))
+                {
+                    Directory.CreateDirectory(blocker);
+                }
+
+                File.WriteAllText(blocker + "-wal", "partial-wal");
+                File.WriteAllText(blocker + "-shm", "partial-shm");
+
+                snapshotPath = new DbFactory().CreatePreMigrationSnapshot(connectionString);
+                if (snapshotPath == null)
+                {
+                    matchedBlocker = blocker;
+                }
+                else if (File.Exists(snapshotPath))
+                {
+                    File.Delete(snapshotPath);
+                }
+            }
+
+            Assert.That(snapshotPath, Is.Null, "Backup must fail when the snapshot path is a directory, and the failure must be swallowed.");
+            Assert.That(matchedBlocker, Is.Not.Null);
+            Assert.That(File.Exists(matchedBlocker + "-wal"), Is.False, "A partial WAL sidecar must be deleted after a failed snapshot.");
+            Assert.That(File.Exists(matchedBlocker + "-shm"), Is.False, "A partial SHM sidecar must be deleted after a failed snapshot.");
+            Assert.That(Directory.Exists(matchedBlocker), Is.True, "File.Delete cannot remove the directory that blocked the snapshot; that failure is logged and ignored.");
+
+            using var stillOpen = new SqliteConnection(connectionString);
+            stillOpen.Open();
+            using var read = stillOpen.CreateCommand();
+            read.CommandText = "SELECT COUNT(*) FROM Keep;";
+            Assert.That(Convert.ToInt32(read.ExecuteScalar()), Is.EqualTo(1));
+        }
+        finally
+        {
+            foreach (var blocker in blockers)
+            {
+                if (Directory.Exists(blocker))
+                {
+                    Directory.Delete(blocker, true);
+                }
+
+                foreach (var suffix in new[] { string.Empty, "-wal", "-shm", "-journal" })
+                {
+                    var path = blocker + suffix;
+                    if (File.Exists(path))
+                    {
+                        File.Delete(path);
+                    }
+                }
+            }
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        // File.Delete of a real sidecar succeeds above. A sidecar in a directory
+        // this process cannot write hits the cleanup catch without failing startup.
+        var lockedDir = Path.Combine(Path.GetTempPath(), "seedarr_snaplock_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(lockedDir);
+        var lockedDb = Path.Combine(lockedDir, "locked.db");
+        var memoryTarget = new MemoryTarget { Layout = "${message}" };
+        var logConfig = new LoggingConfiguration();
+        logConfig.AddTarget("memory", memoryTarget);
+        logConfig.AddRule(LogLevel.Trace, LogLevel.Fatal, memoryTarget);
+        LogManager.Configuration = logConfig;
+        try
+        {
+            using (var setup = new SqliteConnection($"Data Source={lockedDb}"))
+            {
+                setup.Open();
+                using var cmd = setup.CreateCommand();
+                cmd.CommandText = "CREATE TABLE Keep (Id INTEGER PRIMARY KEY); INSERT INTO Keep VALUES (1);";
+                cmd.ExecuteNonQuery();
+            }
+
+            string failedSnapshot = "retry";
+            for (var attempt = 0; attempt < 5 && !memoryTarget.Logs.Any(log => log.Contains("Failed to delete partial")); attempt++)
+            {
+                var partialWal = $"{lockedDb}.pre-migration-{DateTime.UtcNow:yyyyMMddHHmmss}.bak-wal";
+                File.WriteAllText(partialWal, "locked");
+                File.SetUnixFileMode(
+                    lockedDir,
+                    UnixFileMode.UserRead | UnixFileMode.UserExecute);
+                try
+                {
+                    failedSnapshot = new DbFactory().CreatePreMigrationSnapshot($"Data Source={lockedDb}");
+                }
+                finally
+                {
+                    File.SetUnixFileMode(
+                        lockedDir,
+                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                }
+            }
+
+            Assert.That(failedSnapshot, Is.Null);
+            Assert.That(
+                memoryTarget.Logs.Any(log => log.Contains("Failed to delete partial pre-migration snapshot file")),
+                Is.True,
+                "Cleanup must log and continue when a partial snapshot file cannot be deleted.");
+        }
+        finally
+        {
+            File.SetUnixFileMode(
+                lockedDir,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            if (Directory.Exists(lockedDir))
+            {
+                Directory.Delete(lockedDir, true);
+            }
+        }
     }
 
     [Test]
