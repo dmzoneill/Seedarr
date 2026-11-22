@@ -151,7 +151,12 @@ function TorrentGrid({
   const columnCount = torrentGridColumnCount(layoutWidth);
   const rowCount =
     filtered.length === 0 ? 0 : Math.ceil(filtered.length / columnCount);
-  const showCards = !isLoading && !isError && filtered.length > 0;
+  // A failed background refetch sets isError while cached rows are still
+  // present. Replace the grid only when there is nothing left to show.
+  const showLoadError =
+    isError && filtered.length === 0 && fetchedTorrents == null;
+  const showRefreshWarning = isError && !showLoadError;
+  const showCards = !isLoading && !showLoadError && filtered.length > 0;
 
   const rowVirtualizer = useVirtualizer({
     count: showCards ? rowCount : 0,
@@ -244,15 +249,22 @@ function TorrentGrid({
     );
   }
 
-  if (isError) {
+  if (showLoadError) {
     return <p className="error">Failed to load data.</p>;
   }
 
   if (filtered.length === 0) {
     return (
-      <div className="torrent-grid-empty">
-        {t("torrents.noTorrents", undefined, "No torrents found")}
-      </div>
+      <>
+        {showRefreshWarning && (
+          <p className="error" role="alert">
+            Failed to refresh torrents.
+          </p>
+        )}
+        <div className="torrent-grid-empty">
+          {t("torrents.noTorrents", undefined, "No torrents found")}
+        </div>
+      </>
     );
   }
 
@@ -286,6 +298,11 @@ function TorrentGrid({
         position: "relative",
       }}
     >
+      {showRefreshWarning && (
+        <p className="error" role="alert">
+          Failed to refresh torrents.
+        </p>
+      )}
     <div
       ref={parentRef}
       style={{

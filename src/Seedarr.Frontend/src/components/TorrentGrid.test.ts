@@ -11,6 +11,56 @@ import type { Torrent } from "../api/types";
 
 (globalThis as unknown as { React: typeof React }).React = React;
 
+function gridTorrent(id: number, name: string): Torrent {
+  return {
+    id,
+    name,
+    mediaTitle: name,
+    infoHash: `hash-${id}`,
+    totalSize: 1000,
+    pieceCount: 1,
+    pieceLength: 1000,
+    comment: null,
+    createdBy: null,
+    creationDate: null,
+    isPrivate: false,
+    status: "Seeding",
+    uploaded: 1,
+    downloaded: 1,
+    ratio: 1,
+    progress: 1,
+    seeders: 1,
+    leechers: 0,
+    trackerUrl: null,
+    sourcePath: null,
+    dateAdded: "2026-01-01T00:00:00Z",
+    lastActive: null,
+    priority: 0,
+    uploadLimit: 0,
+    downloadLimit: 0,
+    superSeeding: false,
+    forceStart: false,
+    label: null,
+    category: null,
+    savePath: null,
+    sequentialDownload: false,
+    announceInterval: 1800,
+    nextUpdate: 0,
+    sessionUploaded: 0,
+    sessionDownloaded: 0,
+    smallTorrentLimit: 0,
+    threshold: 0,
+    uploadSpeed: 0,
+    downloadSpeed: 0,
+    active: true,
+    availability: 1,
+    eta: 0,
+    sortOrder: 0,
+    forceCompleted: false,
+    seedingTime: 0,
+  };
+}
+
 void describe("TorrentGrid load errors", () => {
   void it("shows a failure state instead of an empty torrent list", () => {
     const queryClient = new QueryClient({
@@ -39,6 +89,34 @@ void describe("TorrentGrid load errors", () => {
 
     assert.ok(markup.includes("Failed to load data."));
     assert.equal(markup.includes("No torrents found"), false);
+  });
+
+  void it("keeps rendered cards when a refresh fails but torrent data remains", () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, retryOnMount: false },
+      },
+    });
+    const kept = gridTorrent(7, "Still Visible");
+    queryClient.setQueryData<Torrent[]>(["torrents"], [kept]);
+    const query = queryClient.getQueryCache().find({ queryKey: ["torrents"] });
+    query?.setState({
+      status: "error",
+      fetchStatus: "idle",
+      error: new Error("refresh failed"),
+    });
+
+    const markup = renderToStaticMarkup(
+      React.createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        React.createElement(TorrentGrid, { torrents: [kept] }),
+      ),
+    );
+
+    assert.ok(markup.includes('aria-label="Select Still Visible"'));
+    assert.ok(markup.includes("Failed to refresh torrents."));
+    assert.equal(markup.includes("Failed to load data."), false);
   });
 });
 
