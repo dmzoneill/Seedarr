@@ -528,7 +528,7 @@ WHERE ""Id"" = @Id";
         };
     }
 
-    private readonly struct ActivityClear
+    private readonly struct ActivityClear : IEquatable<ActivityClear>
     {
         public ActivityClear(int id)
         {
@@ -539,9 +539,34 @@ WHERE ""Id"" = @Id";
         public int Id { get; }
 
         public bool Active { get; }
+
+        public bool Equals(ActivityClear other)
+        {
+            return Id == other.Id && Active == other.Active;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is ActivityClear other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Id, Active);
+        }
+
+        public static bool operator ==(ActivityClear left, ActivityClear right)
+        {
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(ActivityClear left, ActivityClear right)
+        {
+            return !left.Equals(right);
+        }
     }
 
-    private readonly struct SortWrite
+    private readonly struct SortWrite : IEquatable<SortWrite>
     {
         public SortWrite(int id, int sortOrder)
         {
@@ -552,5 +577,30 @@ WHERE ""Id"" = @Id";
         public int Id { get; }
 
         public int SortOrder { get; }
+
+        public bool Equals(SortWrite other)
+        {
+            return Id == other.Id && SortOrder == other.SortOrder;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is SortWrite other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Id, SortOrder);
+        }
+
+        public static bool operator ==(SortWrite left, SortWrite right)
+        {
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(SortWrite left, SortWrite right)
+        {
+            return !left.Equals(right);
+        }
     }
 }
