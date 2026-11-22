@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using DryIoc;
+using Microsoft.Extensions.Hosting;
 
 namespace NzbDrone.Common.Composition;
 
@@ -62,7 +63,7 @@ public static class ContainerExtensions
         if (iface == typeof(IDisposable) ||
             iface == typeof(IAsyncDisposable) ||
             iface == typeof(IComparable) ||
-            iface.FullName == "Microsoft.Extensions.Hosting.IHostedService")
+            iface == typeof(IHostedService))
         {
             return true;
         }
