@@ -42,6 +42,31 @@ internal class CanceledCommandExecutor : IExecute<CanceledCommand>
     }
 }
 
+internal class PollingCommand : Command
+{
+}
+
+internal class PollingCommandExecutor : IExecute<PollingCommand>
+{
+    private readonly ManualResetEventSlim _started;
+
+    public PollingCommandExecutor(ManualResetEventSlim started)
+    {
+        _started = started;
+    }
+
+    public void Execute(PollingCommand command)
+    {
+        _started.Set();
+        while (!CommandExecution.Token.IsCancellationRequested)
+        {
+            Thread.Sleep(10);
+        }
+
+        CommandExecution.Token.ThrowIfCancellationRequested();
+    }
+}
+
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Interface implementation stub")]
 internal class StubCommandRepository : IBasicRepository<CommandModel>
 {
@@ -110,6 +135,12 @@ internal class StubServiceFactory : IServiceFactory
     private readonly SampleCommandExecutor _sampleHandler = new();
     private readonly ThrowingCommandExecutor _throwingHandler = new();
     private readonly CanceledCommandExecutor _canceledHandler = new();
+    private readonly PollingCommandExecutor _pollingHandler;
+
+    public StubServiceFactory(ManualResetEventSlim started)
+    {
+        _pollingHandler = new PollingCommandExecutor(started);
+    }
 
     public T Build<T>()
         where T : class
@@ -134,6 +165,11 @@ internal class StubServiceFactory : IServiceFactory
             return _canceledHandler;
         }
 
+        if (type == typeof(IExecute<PollingCommand>))
+        {
+            return _pollingHandler;
+        }
+
         throw new InvalidOperationException($"No handler for {type.Name}");
     }
 
@@ -150,13 +186,21 @@ public class CommandExecutorTest
     private CommandExecutor _subject;
     private StubServiceFactory _serviceFactory;
     private StubCommandRepository _repository;
+    private ManualResetEventSlim _pollingStarted;
 
     [SetUp]
     public void SetUp()
     {
-        _serviceFactory = new StubServiceFactory();
+        _pollingStarted = new ManualResetEventSlim(false);
+        _serviceFactory = new StubServiceFactory(_pollingStarted);
         _repository = new StubCommandRepository();
         _subject = new CommandExecutor(_serviceFactory, _repository);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _pollingStarted?.Dispose();
     }
 
     [Test]
@@ -222,6 +266,31 @@ public class CommandExecutorTest
 
         Assert.That(command.Status, Is.EqualTo(CommandStatus.Failed));
         Assert.That(command.Message, Is.EqualTo("Handler error"));
+    }
+
+    [Test]
+    public void Execute_cancel_stops_an_in_flight_handler_that_observes_the_token()
+    {
+        var command = new CommandModel { Id = 42, Name = "PollingCommand", Body = "{}" };
+        var execute = Task.Run(() => _subject.Execute(command));
+
+        Assert.That(_pollingStarted.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Assert.That(CommandExecution.TryCancel(command.Id), Is.True);
+        Assert.That(execute.Wait(TimeSpan.FromSeconds(2)), Is.True, "in-flight command should observe cancel");
+        Assert.That(command.Status, Is.EqualTo(CommandStatus.Cancelled));
+    }
+
+    [Test]
+    public void Execute_shutdown_token_stops_an_in_flight_handler()
+    {
+        var command = new CommandModel { Id = 7, Name = "PollingCommand", Body = "{}" };
+        using var shutdown = new CancellationTokenSource();
+        var execute = Task.Run(() => _subject.Execute(command, shutdown.Token));
+
+        Assert.That(_pollingStarted.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        shutdown.Cancel();
+        Assert.That(execute.Wait(TimeSpan.FromSeconds(2)), Is.True, "shutdown should cancel the in-flight command");
+        Assert.That(command.Status, Is.EqualTo(CommandStatus.Cancelled));
     }
 
     [Test]

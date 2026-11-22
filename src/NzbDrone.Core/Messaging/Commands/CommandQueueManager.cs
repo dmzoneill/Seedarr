@@ -105,6 +105,7 @@ public class CommandQueueManager : IManageCommandQueue, IDisposable
 
         if (command.Status == CommandStatus.Queued || command.Status == CommandStatus.Started)
         {
+            CommandExecution.TryCancel(id);
             command.Status = CommandStatus.Cancelled;
             command.EndedAt = DateTime.UtcNow;
             command.Message = "Cancelled by user";

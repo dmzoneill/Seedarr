@@ -27,6 +27,7 @@ public class BackupJob : IScheduledTask, IExecute<BackupCommand>
 
     public void Execute(BackupCommand command)
     {
+        CommandExecution.Token.ThrowIfCancellationRequested();
         var backupType = command?.Type ?? BackupType.Manual;
         _logger.Info("Executing backup via command queue (type: {0})", backupType);
         _backupService.CreateBackup(backupType);

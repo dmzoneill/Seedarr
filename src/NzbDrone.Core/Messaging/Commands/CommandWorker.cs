@@ -36,7 +36,7 @@ public class CommandWorker : BackgroundService
                         break;
                     }
 
-                    _commandExecutor.Execute(command);
+                    _commandExecutor.Execute(command, stoppingToken);
                 }
             }
             catch (Exception ex)

@@ -42,8 +42,10 @@ public class DatabaseVacuumTask : IScheduledTask, IExecute<DatabaseVacuumCommand
 
     public void Execute(DatabaseVacuumCommand command)
     {
+        CommandExecution.Token.ThrowIfCancellationRequested();
         var maxPages = command?.MaxPages ?? 5000;
         _logger.Info("Executing database vacuum via command queue (maxPages: {0})", maxPages);
         _maintenanceService.PerformMaintenance(maxPages);
+        CommandExecution.Token.ThrowIfCancellationRequested();
     }
 }
