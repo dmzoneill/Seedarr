@@ -1037,29 +1037,34 @@ public class ChokeManager : BackgroundService, IChokeManager
             }
 
             var toReject = connection.PendingIncomingRequests.Where(r => !allowedFast.Contains(r.PieceIndex)).ToList();
+            if (toReject.Count == 0)
+            {
+                return;
+            }
+
+            var rejects = new List<PeerMessage>(toReject.Count);
             foreach (var req in toReject)
             {
-                try
+                var payload = new byte[12];
+                BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), req.PieceIndex);
+                BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), req.Begin);
+                BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(8, 4), req.Length);
+                rejects.Add(new PeerMessage
                 {
-                    var payload = new byte[12];
-                    BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), req.PieceIndex);
-                    BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), req.Begin);
-                    BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(8, 4), req.Length);
-
-                    connection.PostMessage(new PeerMessage
-                    {
-                        Type = PeerMessageType.RejectRequest,
-                        Payload = payload
-                    });
-
-                    _logger.Trace("Sent REJECT_REQUEST to peer {0}:{1} for choked piece {2}", connection.RemoteIp, connection.RemotePort, req.PieceIndex);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Debug(ex, "Failed to send reject request to {0}:{1}", connection.RemoteIp, connection.RemotePort);
-                }
-
+                    Type = PeerMessageType.RejectRequest,
+                    Payload = payload
+                });
                 connection.PendingIncomingRequests.Remove(req);
+            }
+
+            try
+            {
+                connection.PostMessages(rejects);
+                _logger.Trace("Queued {0} REJECT_REQUEST messages to peer {1}:{2}", rejects.Count, connection.RemoteIp, connection.RemotePort);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to queue reject requests to {0}:{1}", connection.RemoteIp, connection.RemotePort);
             }
         }
     }

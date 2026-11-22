@@ -876,6 +876,44 @@ public class ChokeManagerTest
     }
 
     [Test]
+    public void Choke_fast_extension_peer_with_pipelined_requests_stays_connected()
+    {
+        const int pendingRequests = 200;
+        var stream = new MemoryStream();
+        var peer = new PeerConnection(stream, "127.0.0.1", 1601)
+        {
+            InfoHash = "hashA",
+            PeerInterested = true,
+            AmChoking = false,
+            SupportsFastExtension = true
+        };
+        _connections.Add(peer);
+
+        for (var i = 0; i < pendingRequests; i++)
+        {
+            peer.PendingIncomingRequests.Add(new PeerRequest(i, 0, 16384));
+        }
+
+        var rejects = 0;
+        peer.MessageSent += (_, msg) =>
+        {
+            if (msg.Type == PeerMessageType.RejectRequest)
+            {
+                Interlocked.Increment(ref rejects);
+            }
+        };
+
+        _subject.Choke(peer);
+
+        Assert.That(peer.IsDisposed, Is.False);
+        Assert.That(peer.IsConnected, Is.True);
+        Assert.That(peer.AmChoking, Is.True);
+        Assert.That(peer.PendingIncomingRequests, Is.Empty);
+        Assert.That(() => Volatile.Read(ref rejects), Is.EqualTo(pendingRequests).After(3000, 20));
+        Assert.That(stream.Length, Is.EqualTo(5 + (pendingRequests * 17)));
+    }
+
+    [Test]
     public void ProcessOptimisticUnchoke_can_select_snubbed_peer_and_reset_snubbed_state_on_activity()
     {
         _configService.MaxUploadSlots.Returns(2);

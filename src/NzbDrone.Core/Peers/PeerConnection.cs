@@ -1358,6 +1358,96 @@ public class PeerConnection : IDisposable
         SendQueued(message, wait: false);
     }
 
+    /// <summary>
+    /// Enqueues many messages as one outbound frame.
+    /// A choke can reject every pipelined request at once; posting them separately would fill the
+    /// bounded queue and disconnect a peer that is still reading.
+    /// </summary>
+    public virtual void PostMessages(IReadOnlyList<PeerMessage> messages)
+    {
+        if (messages == null || messages.Count == 0 || _isDisposed)
+        {
+            return;
+        }
+
+        var count = 0;
+        for (var i = 0; i < messages.Count; i++)
+        {
+            if (messages[i] != null)
+            {
+                count++;
+            }
+        }
+
+        if (count == 0)
+        {
+            return;
+        }
+
+        var totalSize = 0;
+        for (var i = 0; i < messages.Count; i++)
+        {
+            var message = messages[i];
+            if (message != null)
+            {
+                totalSize += 4 + message.Length;
+            }
+        }
+
+        var buffer = ArrayPool<byte>.Shared.Rent(totalSize);
+        var queued = false;
+        try
+        {
+            var toSend = new PeerMessage[count];
+            var written = 0;
+            var index = 0;
+            for (var i = 0; i < messages.Count; i++)
+            {
+                var message = messages[i];
+                if (message == null)
+                {
+                    continue;
+                }
+
+                written += EncodeMessage(message, buffer, written);
+                toSend[index++] = message;
+            }
+
+            EnqueueOrThrow(new OutboundFrame
+            {
+                Buffer = buffer,
+                Count = written,
+                Messages = toSend
+            });
+            queued = true;
+        }
+        finally
+        {
+            if (!queued)
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+        }
+    }
+
+    private static int EncodeMessage(PeerMessage message, byte[] buffer, int offset)
+    {
+        var length = message.Length;
+        buffer[offset] = (byte)(length >> 24);
+        buffer[offset + 1] = (byte)(length >> 16);
+        buffer[offset + 2] = (byte)(length >> 8);
+        buffer[offset + 3] = (byte)length;
+        buffer[offset + 4] = (byte)message.Type;
+
+        var payloadLength = message.EffectivePayloadLength;
+        if (message.Payload != null && payloadLength > 0)
+        {
+            Array.Copy(message.Payload, 0, buffer, offset + 5, payloadLength);
+        }
+
+        return 4 + length;
+    }
+
     private void SendQueued(PeerMessage message, bool wait)
     {
         if (message == null || _isDisposed)
@@ -1510,18 +1600,9 @@ public class PeerConnection : IDisposable
 
             await WriteBufferAsync(frame.Buffer, frame.Count, cancellationToken).ConfigureAwait(false);
             LastActivity = DateTime.UtcNow;
-            if (frame.Message != null)
+            if (!NotifyMessagesSent(frame))
             {
-                try
-                {
-                    MessageSent?.Invoke(this, frame.Message);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Debug(ex, "MessageSent handler failed for peer {0}:{1}", RemoteIp, RemotePort);
-                    frame.Completion?.TrySetException(ex);
-                    return false;
-                }
+                return false;
             }
 
             frame.Completion?.TrySetResult(true);
@@ -1546,6 +1627,44 @@ public class PeerConnection : IDisposable
                 ArrayPool<byte>.Shared.Return(frame.Buffer);
                 frame.Buffer = null;
             }
+        }
+    }
+
+    private bool NotifyMessagesSent(OutboundFrame frame)
+    {
+        if (frame.Messages != null)
+        {
+            for (var i = 0; i < frame.Messages.Length; i++)
+            {
+                if (!NotifyMessageSent(frame, frame.Messages[i]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return frame.Message == null || NotifyMessageSent(frame, frame.Message);
+    }
+
+    private bool NotifyMessageSent(OutboundFrame frame, PeerMessage message)
+    {
+        if (message == null)
+        {
+            return true;
+        }
+
+        try
+        {
+            MessageSent?.Invoke(this, message);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "MessageSent handler failed for peer {0}:{1}", RemoteIp, RemotePort);
+            frame.Completion?.TrySetException(ex);
+            return false;
         }
     }
 
@@ -2704,6 +2823,7 @@ public class PeerConnection : IDisposable
         public int Count;
         public TaskCompletionSource<bool> Completion;
         public PeerMessage Message;
+        public PeerMessage[] Messages;
     }
 }
 
