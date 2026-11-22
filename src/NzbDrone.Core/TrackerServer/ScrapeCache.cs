@@ -38,6 +38,8 @@ public class ScrapeCacheEntry
 
 public class ScrapeCache : IScrapeCache, IDisposable
 {
+    public const int MaxEntries = 1024;
+
     private readonly ConcurrentDictionary<string, ScrapeCacheEntry> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _fullScrapeSemaphore = new(2, 2);
     private readonly TimeSpan _defaultTtl;
@@ -76,6 +78,29 @@ public class ScrapeCache : IScrapeCache, IDisposable
         var effectiveTtl = ttl ?? _defaultTtl;
         var expiresAt = DateTime.UtcNow.Add(effectiveTtl);
         _cache[key] = new ScrapeCacheEntry(payload, expiresAt);
+        TrimToCapacity(key);
+    }
+
+    private void TrimToCapacity(string keep)
+    {
+        if (_cache.Count <= MaxEntries)
+        {
+            return;
+        }
+
+        PurgeExpired();
+        foreach (var extra in _cache.Keys)
+        {
+            if (_cache.Count <= MaxEntries)
+            {
+                break;
+            }
+
+            if (!string.Equals(extra, keep, StringComparison.OrdinalIgnoreCase))
+            {
+                _cache.TryRemove(extra, out _);
+            }
+        }
     }
 
     public byte[] GetOrCreate(string key, Func<byte[]> factory, TimeSpan? ttl = null)

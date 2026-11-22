@@ -45,6 +45,8 @@ public class ScrapeStats
 
 public class PeerDatabase : IPeerDatabase, IDisposable
 {
+    public const int MaxPeersPerInfoHash = 200;
+    public const int MaxInfoHashes = 10000;
     private const int PeerTtlMinutes = 45;
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -123,6 +125,13 @@ public class PeerDatabase : IPeerDatabase, IDisposable
             foreach (var emptyHash in emptyHashes)
             {
                 _peers.Remove(emptyHash);
+                _completed.Remove(emptyHash);
+            }
+
+            var untrackedCompletions = _completed.Keys.Where(hash => !_peers.ContainsKey(hash)).ToList();
+            foreach (var hash in untrackedCompletions)
+            {
+                _completed.Remove(hash);
             }
 
             return totalEvicted;
@@ -159,12 +168,20 @@ public class PeerDatabase : IPeerDatabase, IDisposable
     {
         lock (_lock)
         {
+            if (string.IsNullOrEmpty(infoHash))
+            {
+                return;
+            }
+
+            var isNewSwarm = !_peers.ContainsKey(infoHash);
+            if (isNewSwarm && _peers.Count >= MaxInfoHashes)
+            {
+                return;
+            }
+
             if (string.Equals(announceEvent, "completed", StringComparison.OrdinalIgnoreCase))
             {
-                if (!string.IsNullOrEmpty(infoHash))
-                {
-                    _completed[infoHash] = _completed.GetValueOrDefault(infoHash, 0) + 1;
-                }
+                _completed[infoHash] = _completed.GetValueOrDefault(infoHash, 0) + 1;
             }
 
             if (!_peers.TryGetValue(infoHash, out var list))
@@ -184,6 +201,20 @@ public class PeerDatabase : IPeerDatabase, IDisposable
             }
             else
             {
+                while (list.Count >= MaxPeersPerInfoHash)
+                {
+                    var oldestIndex = 0;
+                    for (var i = 1; i < list.Count; i++)
+                    {
+                        if (list[i].LastAnnounce < list[oldestIndex].LastAnnounce)
+                        {
+                            oldestIndex = i;
+                        }
+                    }
+
+                    list.RemoveAt(oldestIndex);
+                }
+
                 list.Add(new TrackerPeerEntry
                 {
                     Ip = ip,
@@ -215,6 +246,7 @@ public class PeerDatabase : IPeerDatabase, IDisposable
                 if (list.Count == 0)
                 {
                     _peers.Remove(infoHash);
+                    _completed.Remove(infoHash);
                 }
             }
         }

@@ -1714,7 +1714,7 @@ public class TrackerServerTest
     }
 
     [Test]
-    public void IsRateLimited_should_track_different_swarms_on_same_ip_independently()
+    public void IsRateLimited_does_not_reset_when_the_info_hash_changes()
     {
         _configService.TrackerRateLimitPerMinute.Returns(2);
 
@@ -1723,7 +1723,7 @@ public class TrackerServerTest
         InvokeIsRateLimited("192.168.1.1", "hashA");
 
         Assert.That(InvokeIsRateLimited("192.168.1.1", "hashA"), Is.True);
-        Assert.That(InvokeIsRateLimited("192.168.1.1", "hashB"), Is.False);
+        Assert.That(InvokeIsRateLimited("192.168.1.1", "hashB"), Is.True);
     }
 
     // ---- PurgeExpiredRateLimits tests ----
@@ -2239,19 +2239,17 @@ public class TrackerServerTest
     }
 
     [Test]
-    public void HandleRequest_should_allow_different_info_hashes_from_same_ip_when_one_is_rate_limited()
+    public void HandleRequest_rate_limit_follows_the_ip_when_the_info_hash_changes()
     {
         _configService.TrackerRateLimitPerMinute.Returns(1);
         _peerDatabase.GetPeers(Arg.Any<string>()).Returns(new List<TrackerPeerEntry>());
 
-        // Rate limit swarm "74657374" (info_hash=test) on 127.0.0.1
         InvokeIsRateLimited("127.0.0.1", "74657374");
         InvokeIsRateLimited("127.0.0.1", "74657374");
 
-        // Request for info_hash=other should succeed with 200 OK because rate limits are per swarm
         var (response, _) = SendHttpRequestViaHandleRequest(
             "GET /announce?info_hash=other&port=6881 HTTP/1.1\r\nHost: localhost\r\n\r\n");
-        Assert.That(response, Does.StartWith("HTTP/1.1 200 OK"));
+        Assert.That(response, Does.StartWith("HTTP/1.1 429"));
     }
 
     [Test]
@@ -2495,5 +2493,67 @@ public class TrackerServerTest
         }
 
         return -1;
+    }
+
+    [Test]
+    public void HandleAnnounce_rejects_info_hash_that_is_not_20_bytes_or_40_hex()
+    {
+        var result = InvokeHandleAnnounceText(
+            $"/announce?info_hash=abcd&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
+            new IPEndPoint(IPAddress.Parse("203.0.113.8"), 6881));
+
+        Assert.That(result, Does.Contain("Invalid parameters"));
+        _peerDatabase.DidNotReceiveWithAnyArgs().AddPeer(default, default, default, default);
+    }
+
+    [Test]
+    public void HandleScrape_caps_the_info_hash_list_at_the_udp_limit()
+    {
+        _peerDatabase.GetStats(Arg.Any<string>()).Returns(new ScrapeStats());
+        var hashes = Enumerable.Range(0, Core.TrackerServer.TrackerServer.MaxHttpScrapeHashes + 10)
+            .Select(i => i.ToString("x40"));
+        var path = "/scrape?" + string.Join("&", hashes.Select(hash => "info_hash=" + hash));
+
+        var body = InvokeHandleScrape(path);
+        var needle = "8:complete";
+        var count = 0;
+        var index = 0;
+        while ((index = body.IndexOf(needle, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += needle.Length;
+        }
+
+        Assert.That(count, Is.EqualTo(Core.TrackerServer.TrackerServer.MaxHttpScrapeHashes));
+    }
+
+    [Test]
+    public void HandleScrape_does_not_dump_every_swarm_when_every_info_hash_is_malformed()
+    {
+        _peerDatabase.GetAllStats().Returns(new Dictionary<string, ScrapeStats>
+        {
+            ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] = new ScrapeStats { Complete = 9 }
+        });
+
+        var result = InvokeHandleScrape("/scrape?info_hash=nope&info_hash=still-nope");
+
+        Assert.That(result, Does.Contain("Invalid parameters"));
+        Assert.That(result, Does.Not.Contain("completei9e"));
+        _peerDatabase.DidNotReceive().GetAllStats();
+    }
+
+    [Test]
+    public void PruneStalePeerTraffic_removes_entries_that_never_sent_stopped()
+    {
+        var field = typeof(Core.TrackerServer.TrackerServer).GetField("_peerTraffic", BindingFlags.NonPublic | BindingFlags.Instance);
+        var traffic = (ConcurrentDictionary<string, (long Uploaded, long Downloaded, DateTime LastSeenUtc)>)field.GetValue(_trackerServer);
+        traffic["old"] = (10, 20, DateTime.UtcNow.AddMinutes(-(Core.TrackerServer.TrackerServer.PeerTrafficTtlMinutes + 5)));
+        traffic["fresh"] = (10, 20, DateTime.UtcNow);
+
+        var removed = _trackerServer.PruneStalePeerTraffic();
+
+        Assert.That(removed, Is.EqualTo(1));
+        Assert.That(traffic.ContainsKey("old"), Is.False);
+        Assert.That(traffic.ContainsKey("fresh"), Is.True);
     }
 }

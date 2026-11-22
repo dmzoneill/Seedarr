@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,6 +22,10 @@ namespace NzbDrone.Core.TrackerServer;
 
 public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisposable
 {
+    internal const int MaxHttpScrapeHashes = 74;
+    internal const int PeerTrafficTtlMinutes = 45;
+    internal const int MaxPeerTrafficEntries = 50000;
+
     private static readonly byte[] MissingParametersResponse = Encoding.ASCII.GetBytes("d14:failure reason25:Missing required parameterse");
     private static readonly byte[] InvalidParametersResponse = Encoding.ASCII.GetBytes("d14:failure reason18:Invalid parameterse");
     private static readonly byte[] MissingPasskeyResponse = Encoding.ASCII.GetBytes("d14:failure reason25:Missing announce passkeye");
@@ -34,7 +39,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
     private readonly ITorrentService _torrentService;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, RateLimitEntry> _rateLimits = new();
-    private readonly ConcurrentDictionary<string, (long Uploaded, long Downloaded)> _peerTraffic = new();
+    private readonly ConcurrentDictionary<string, (long Uploaded, long Downloaded, DateTime LastSeenUtc)> _peerTraffic = new();
     private readonly object _listenerLock = new();
 
     private TcpListener _listener;
@@ -230,6 +235,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
             _ =>
             {
                 PurgeExpiredRateLimits();
+                PruneStalePeerTraffic();
                 _scrapeCache.PurgeExpired();
             },
             null,
@@ -503,7 +509,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
                 if (string.Equals(key, "info_hash", StringComparison.OrdinalIgnoreCase))
                 {
                     var rawBytes = DecodeUrlBytes(rawValue);
-                    result[key] = NormalizeInfoHashToHex(rawBytes);
+                    result[key] = NormalizeInfoHashToHex(rawBytes) ?? string.Empty;
                 }
                 else if (string.Equals(key, "peer_id", StringComparison.OrdinalIgnoreCase))
                 {
@@ -554,9 +560,10 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
                 {
                     var rawValue = pair[(eqIndex + 1)..];
                     var rawBytes = DecodeUrlBytes(rawValue);
-                    if (rawBytes.Length > 0)
+                    var normalized = NormalizeInfoHashToHex(rawBytes);
+                    if (!string.IsNullOrEmpty(normalized))
                     {
-                        result.Add(NormalizeInfoHashToHex(rawBytes));
+                        result.Add(normalized);
                     }
                 }
             }
@@ -606,6 +613,11 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
 
     private static string NormalizeInfoHashToHex(byte[] rawBytes)
     {
+        if (rawBytes == null)
+        {
+            return null;
+        }
+
         if (rawBytes.Length == 20)
         {
             return Convert.ToHexString(rawBytes).ToLowerInvariant();
@@ -616,7 +628,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
             return Encoding.ASCII.GetString(rawBytes).ToLowerInvariant();
         }
 
-        return Convert.ToHexString(rawBytes).ToLowerInvariant();
+        return null;
     }
 
     private static bool IsHexBytes(byte[] bytes)
@@ -667,6 +679,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
         }
 
         if (string.IsNullOrEmpty(infoHash) ||
+            infoHash.Length != 40 ||
             string.IsNullOrEmpty(peerId) ||
             peerId.Length != 20 ||
             !int.TryParse(portStr, out var port) || port < 1 || port > 65535 ||
@@ -724,7 +737,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
                 downloadedDelta = downloaded;
             }
 
-            _peerTraffic[trafficKey] = (uploaded, downloaded);
+            _peerTraffic[trafficKey] = (uploaded, downloaded, DateTime.UtcNow);
 
             if (string.Equals(eventType, "stopped", StringComparison.OrdinalIgnoreCase))
             {
@@ -791,9 +804,19 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
             return Encoding.ASCII.GetBytes("d14:failure reason15:Scrape disablede");
         }
 
+        var requestedInfoHash = path.Contains("info_hash=", StringComparison.OrdinalIgnoreCase);
         var infoHashes = ExtractInfoHashes(path);
+        if (infoHashes.Count > MaxHttpScrapeHashes)
+        {
+            infoHashes = infoHashes.Take(MaxHttpScrapeHashes).ToList();
+        }
 
         _peerDatabase.IncrementScrapes();
+
+        if (requestedInfoHash && infoHashes.Count == 0)
+        {
+            return InvalidParametersResponse;
+        }
 
         if (infoHashes.Count == 0)
         {
@@ -814,7 +837,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
             });
         }
 
-        var cacheKey = "multi:" + string.Join(",", infoHashes.Distinct(StringComparer.OrdinalIgnoreCase));
+        var cacheKey = "multi:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', infoHashes.OrderBy(hash => hash, StringComparer.OrdinalIgnoreCase)))));
         return _scrapeCache.GetOrCreate(cacheKey, () => BuildMultiScrapeResponse(infoHashes));
     }
 
@@ -1039,7 +1062,9 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
             return false;
         }
 
-        var key = string.IsNullOrEmpty(infoHash) ? ip : $"{ip}:{infoHash.ToLowerInvariant()}";
+        // Per IP. A key of ip:infoHash lets a caller reset the bucket by rotating info_hash.
+        var key = ip ?? string.Empty;
+        _ = infoHash;
         var now = DateTime.UtcNow;
         var entry = _rateLimits.AddOrUpdate(
             key,
@@ -1069,6 +1094,40 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
         {
             _rateLimits.TryRemove(key, out _);
         }
+    }
+
+    internal int PruneStalePeerTraffic(DateTime? utcNow = null)
+    {
+        var now = utcNow ?? DateTime.UtcNow;
+        var cutoff = now.AddMinutes(-PeerTrafficTtlMinutes);
+        var removed = 0;
+        foreach (var entry in _peerTraffic)
+        {
+            if (entry.Value.LastSeenUtc < cutoff && _peerTraffic.TryRemove(entry.Key, out _))
+            {
+                removed++;
+            }
+        }
+
+        if (_peerTraffic.Count <= MaxPeerTrafficEntries)
+        {
+            return removed;
+        }
+
+        foreach (var key in _peerTraffic.OrderBy(entry => entry.Value.LastSeenUtc).Select(entry => entry.Key).ToList())
+        {
+            if (_peerTraffic.Count <= MaxPeerTrafficEntries)
+            {
+                break;
+            }
+
+            if (_peerTraffic.TryRemove(key, out _))
+            {
+                removed++;
+            }
+        }
+
+        return removed;
     }
 
     private sealed class RateLimitEntry

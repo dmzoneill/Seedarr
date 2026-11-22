@@ -27,6 +27,17 @@ public class ScrapeCacheTests
     }
 
     [Test]
+    public void Set_does_not_grow_past_the_entry_cap()
+    {
+        for (var i = 0; i < ScrapeCache.MaxEntries + 50; i++)
+        {
+            _cache.Set("hash-" + i, new byte[] { 1 });
+        }
+
+        Assert.That(_cache.Count, Is.LessThanOrEqualTo(ScrapeCache.MaxEntries));
+    }
+
+    [Test]
     public void GetOrCreate_should_return_cached_payload_within_ttl_without_reinvoking_factory()
     {
         var callCount = 0;
