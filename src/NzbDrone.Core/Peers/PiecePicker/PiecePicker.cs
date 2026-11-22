@@ -583,9 +583,9 @@ public class PiecePicker : IDownloadManager, IPiecePicker
                             block.TimeoutCts = null;
                         }
 
-                        if (peer != null && peer.PendingRequestCount > 0)
+                        if (peer != null)
                         {
-                            peer.PendingRequestCount--;
+                            peer.DecrementPendingRequests();
                         }
                     }
                 }
@@ -639,6 +639,6 @@ public class PiecePicker : IDownloadManager, IPiecePicker
         }
 
         block.TimeoutCts = new CancellationTokenSource();
-        peer.PendingRequestCount++;
+        peer.IncrementPendingRequests();
     }
 }

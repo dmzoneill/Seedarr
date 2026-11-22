@@ -236,6 +236,7 @@ public class EndgameManagerTest
     {
         var (clientConn, serverConn) = CreateTestPair();
         serverConn.PendingRequestCount = 3;
+        serverConn.IncomingRequestCount = 2;
 
         var targetBlock = new PeerRequest(2, 16384, 16384);
         var otherBlock = new PeerRequest(3, 0, 16384);
@@ -259,7 +260,8 @@ public class EndgameManagerTest
 
         InvokeHandleMessage(serverConn, cancelMsg);
 
-        Assert.That(serverConn.PendingRequestCount, Is.EqualTo(2));
+        Assert.That(serverConn.PendingRequestCount, Is.EqualTo(3));
+        Assert.That(serverConn.IncomingRequestCount, Is.EqualTo(1));
         Assert.That(serverConn.OutboundQueue, Does.Not.Contain(targetBlock));
         Assert.That(serverConn.OutboundQueue, Contains.Item(otherBlock));
         Assert.That(serverConn.PendingIncomingRequests, Does.Not.Contain(targetBlock));
