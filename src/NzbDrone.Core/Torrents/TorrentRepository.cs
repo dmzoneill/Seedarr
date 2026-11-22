@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -23,9 +24,22 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
         var normalized = infoHash.Trim().ToLowerInvariant();
 
         return QueryWithRetry(connection =>
-            connection.QueryFirstOrDefault<int>(
-                $"SELECT COUNT(1) FROM \"{_table}\" WHERE LOWER(\"InfoHash\") = @InfoHash OR LOWER(\"InfoHashV2\") = @InfoHash",
-                new { InfoHash = normalized }) > 0);
+        {
+            // Separate predicates so SQLite can use IX_Torrents_InfoHash / IX_Torrents_InfoHashV2
+            // (expression indexes on LOWER(column)). An OR across the two columns does not.
+            var v1 = connection.QueryFirstOrDefault<int>(
+                $"SELECT COUNT(1) FROM \"{_table}\" WHERE LOWER(\"InfoHash\") = @InfoHash",
+                new { InfoHash = normalized });
+            if (v1 > 0)
+            {
+                return true;
+            }
+
+            var v2 = connection.QueryFirstOrDefault<int>(
+                $"SELECT COUNT(1) FROM \"{_table}\" WHERE LOWER(\"InfoHashV2\") = @InfoHash",
+                new { InfoHash = normalized });
+            return v2 > 0;
+        });
     }
 
     public Torrent GetByInfoHash(string infoHash)
@@ -38,9 +52,19 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
         var normalized = infoHash.Trim().ToLowerInvariant();
 
         return QueryWithRetry(connection =>
-            connection.QueryFirstOrDefault<Torrent>(
-                $"SELECT * FROM \"{_table}\" WHERE LOWER(\"InfoHash\") = @InfoHash OR LOWER(\"InfoHashV2\") = @InfoHash",
-                new { InfoHash = normalized }));
+        {
+            var byV1 = connection.QueryFirstOrDefault<Torrent>(
+                $"SELECT * FROM \"{_table}\" WHERE LOWER(\"InfoHash\") = @InfoHash",
+                new { InfoHash = normalized });
+            if (byV1 != null)
+            {
+                return byV1;
+            }
+
+            return connection.QueryFirstOrDefault<Torrent>(
+                $"SELECT * FROM \"{_table}\" WHERE LOWER(\"InfoHashV2\") = @InfoHash",
+                new { InfoHash = normalized });
+        });
     }
 
     public Torrent FindByInfoHash(string infoHash)
@@ -64,14 +88,32 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
         return QueryWithRetry(connection =>
         {
             var result = new List<Torrent>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var batch in hashes.Chunk(500))
             {
-                var records = connection.Query<Torrent>(
-                    $"SELECT * FROM \"{_table}\" WHERE LOWER(\"InfoHash\") IN @Hashes OR LOWER(\"InfoHashV2\") IN @Hashes",
+                var byV1 = connection.Query<Torrent>(
+                    $"SELECT * FROM \"{_table}\" WHERE LOWER(\"InfoHash\") IN @Hashes",
+                    new { Hashes = batch });
+                var byV2 = connection.Query<Torrent>(
+                    $"SELECT * FROM \"{_table}\" WHERE LOWER(\"InfoHashV2\") IN @Hashes",
                     new { Hashes = batch });
 
-                result.AddRange(records);
+                foreach (var torrent in byV1.Concat(byV2))
+                {
+                    if (torrent == null)
+                    {
+                        continue;
+                    }
+
+                    var key = !string.IsNullOrWhiteSpace(torrent.InfoHash)
+                        ? torrent.InfoHash
+                        : torrent.InfoHashV2 ?? string.Empty;
+                    if (seen.Add(key))
+                    {
+                        result.Add(torrent);
+                    }
+                }
             }
 
             return result;
