@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using NLog;
 using NzbDrone.Common;
 using NzbDrone.Common.Serializer;
@@ -14,6 +15,8 @@ namespace NzbDrone.Core.Messaging.Commands;
 public interface ICommandExecutor
 {
     void Execute(CommandModel command);
+
+    void Execute(CommandModel command, CancellationToken cancellationToken);
 }
 
 public class CommandExecutor : ICommandExecutor
@@ -38,7 +41,16 @@ public class CommandExecutor : ICommandExecutor
 
     public void Execute(CommandModel command)
     {
+        Execute(command, CancellationToken.None);
+    }
+
+    public void Execute(CommandModel command, CancellationToken cancellationToken)
+    {
         _logger.Trace("Executing {0}", command.Name);
+
+        using var commandCancellation = new CancellationTokenSource();
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, commandCancellation.Token);
+        CommandExecution.Register(command.Id, commandCancellation);
 
         var executionStarted = false;
         var completedSuccessfully = false;
@@ -84,7 +96,10 @@ public class CommandExecutor : ICommandExecutor
             }
 
             var executeMethod = handlerType.GetMethod("Execute");
-            executeMethod!.Invoke(handler, new[] { typedCommand });
+            using (CommandExecution.Push(linked.Token))
+            {
+                executeMethod!.Invoke(handler, new[] { typedCommand });
+            }
 
             current = _repository.Get(command.Id);
             if (current != null && current.Status == CommandStatus.Cancelled)
@@ -109,6 +124,14 @@ public class CommandExecutor : ICommandExecutor
             }
 
             var inner = ex is TargetInvocationException tie ? tie.InnerException ?? ex : ex;
+            if (inner is OperationCanceledException && linked.IsCancellationRequested)
+            {
+                command.Status = CommandStatus.Cancelled;
+                command.Message = "Cancelled";
+                _logger.Debug("Command {0} (id: {1}) was cancelled", command.Name, command.Id);
+                return;
+            }
+
             command.Status = CommandStatus.Failed;
             command.Message = inner.Message;
             _logger.Error(inner, "Error executing {0}", command.Name);
@@ -136,6 +159,8 @@ public class CommandExecutor : ICommandExecutor
             {
                 BroadcastCommand("CommandFailed", ModelAction.Updated, command);
             }
+
+            CommandExecution.Unregister(command.Id);
         }
     }
 

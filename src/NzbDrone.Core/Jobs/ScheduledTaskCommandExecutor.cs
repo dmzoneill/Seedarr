@@ -50,6 +50,7 @@ public class ScheduledTaskCommandExecutor : IExecute<ScheduledTaskCommand>
         _logger.Info("Executing scheduled task via command queue: {0}", command.TaskName);
         var startTime = DateTime.UtcNow;
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, CommandExecution.Token);
         _taskManager.RecordTaskStarted(command.TaskName, cts, null, command.TriggerSource);
 
         var signalRTypeName = ScheduledTaskTypeNameResolver.ResolveForSignalR(command.TaskName, taskInstance, _scheduledTasks);
@@ -71,7 +72,7 @@ public class ScheduledTaskCommandExecutor : IExecute<ScheduledTaskCommand>
         var completedSuccessfully = true;
         try
         {
-            taskInstance.Execute(cts.Token);
+            taskInstance.Execute(linked.Token);
             _logger.Info("Scheduled task completed successfully: {0}", command.TaskName);
         }
         catch (OperationCanceledException ex)
