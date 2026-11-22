@@ -293,12 +293,13 @@ public class AppLifetimeTest
 
         await _subject.StopAsync(CancellationToken.None);
 
-        // Phase 1: Halt inbound traffic and send event=stopped announce
+        // Inbound listener stops, then event=stopped is announced after durability.
         _peerServer.Received(1).StopListening();
-        _trackerAnnounceService.Received(1).AnnounceTorrent(
+        await _trackerAnnounceService.Received(1).AnnounceTorrentAsync(
             Arg.Is<Torrent>(t => t.Id == 1),
             force: true,
-            eventType: AnnounceEvent.Stopped);
+            eventType: AnnounceEvent.Stopped,
+            cancellationToken: Arg.Any<CancellationToken>());
 
         // Phase 2: State and buffer serialization
         _pieceStorage.Received(1).Flush();
@@ -346,14 +347,16 @@ public class AppLifetimeTest
 
         await _subject.StopAsync(CancellationToken.None);
 
-        _trackerAnnounceService.Received(1).AnnounceTorrent(
+        await _trackerAnnounceService.Received(1).AnnounceTorrentAsync(
             Arg.Is<Torrent>(t => t.Id == 1),
             force: true,
-            eventType: AnnounceEvent.Stopped);
-        _trackerAnnounceService.DidNotReceive().AnnounceTorrent(
+            eventType: AnnounceEvent.Stopped,
+            cancellationToken: Arg.Any<CancellationToken>());
+        await _trackerAnnounceService.DidNotReceive().AnnounceTorrentAsync(
             Arg.Is<Torrent>(t => t.Id == 2),
             Arg.Any<bool>(),
-            Arg.Any<AnnounceEvent>());
+            Arg.Any<AnnounceEvent>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -374,10 +377,11 @@ public class AppLifetimeTest
 
         await _subject.StopAsync(cts.Token);
 
-        _trackerAnnounceService.Received(1).AnnounceTorrent(
+        await _trackerAnnounceService.Received(1).AnnounceTorrentAsync(
             Arg.Is<Torrent>(t => t.Id == 1),
             force: true,
-            eventType: AnnounceEvent.Stopped);
+            eventType: AnnounceEvent.Stopped,
+            cancellationToken: Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -420,49 +424,49 @@ public class AppLifetimeTest
     }
 
     [Test]
-    public async Task StopAsync_should_complete_tracker_announces_before_disconnect_when_bounded_wait_expires()
+    public async Task StopAsync_persists_fastresume_and_checkpoint_without_waiting_out_stopped_announces()
     {
         var torrent = new Torrent
         {
             Id = 1,
             InfoHash = "0123456789abcdef0123456789abcdef01234567",
-            Status = TorrentStatus.Downloading,
+            Status = TorrentStatus.Seeding,
             Active = true
         };
 
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
-        using var announceBlocked = new ManualResetEventSlim(false);
-        using var releaseAnnounce = new ManualResetEventSlim(false);
-        var disconnectCalled = false;
+        var order = new List<string>();
+        _fastResumeService.When(x => x.SaveAll()).Do(_ => order.Add("save"));
+        _mainDatabase.When(x => x.Checkpoint(Arg.Any<WalCheckpointMode>())).Do(_ => order.Add("checkpoint"));
 
+        // The old sync wrapper blocked a pool thread for the whole tracker timeout.
         _trackerAnnounceService
             .When(x => x.AnnounceTorrent(Arg.Any<Torrent>(), Arg.Any<bool>(), Arg.Any<AnnounceEvent>()))
-            .Do(_ =>
+            .Do(_ => Thread.Sleep(TimeSpan.FromSeconds(15)));
+
+        _trackerAnnounceService
+            .AnnounceTorrentAsync(Arg.Any<Torrent>(), Arg.Any<bool>(), Arg.Any<AnnounceEvent>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
             {
-                announceBlocked.Set();
-                releaseAnnounce.Wait(TimeSpan.FromSeconds(30));
+                order.Add("announce");
+                var token = call.ArgAt<CancellationToken>(3);
+                return Task.Delay(TimeSpan.FromSeconds(30), token).ContinueWith(
+                    _ => new List<TrackerAnnounceResult>(),
+                    CancellationToken.None,
+                    TaskContinuationOptions.None,
+                    TaskScheduler.Default);
             });
 
-        _connectionManager
-            .When(x => x.DisconnectAllAsync())
-            .Do(_ =>
-            {
-                disconnectCalled = true;
-                return Task.CompletedTask;
-            });
+        var started = DateTime.UtcNow;
+        await _subject.StopAsync(CancellationToken.None);
+        var elapsed = DateTime.UtcNow - started;
 
-        var stopTask = Task.Run(() => _subject.StopAsync(CancellationToken.None));
-
-        Assert.True(announceBlocked.Wait(TimeSpan.FromSeconds(10)), "Stopped announce should start");
-        await Task.Delay(2600);
-        Assert.False(disconnectCalled, "Disconnect must not run while stopped announces are still in flight");
-
-        releaseAnnounce.Set();
-        await stopTask;
-
-        Assert.True(disconnectCalled);
-        await _connectionManager.Received(1).DisconnectAllAsync();
+        Assert.That(order, Does.Contain("save"));
+        Assert.That(order, Does.Contain("checkpoint"));
+        Assert.That(order.IndexOf("save"), Is.LessThan(order.IndexOf("announce")));
+        Assert.That(order.IndexOf("checkpoint"), Is.LessThan(order.IndexOf("announce")));
+        Assert.That(elapsed, Is.LessThan(TimeSpan.FromSeconds(10)), "FastResume/WAL checkpoint would be SIGKILLed by docker stop (10s default)");
     }
 
     [Test]
@@ -477,8 +481,9 @@ public class AppLifetimeTest
         };
 
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
-        _trackerAnnounceService.When(x => x.AnnounceTorrent(Arg.Any<Torrent>(), Arg.Any<bool>(), Arg.Any<AnnounceEvent>()))
-            .Do(_ => throw new InvalidOperationException("Tracker unreachable"));
+        _trackerAnnounceService
+            .AnnounceTorrentAsync(Arg.Any<Torrent>(), Arg.Any<bool>(), Arg.Any<AnnounceEvent>(), Arg.Any<CancellationToken>())
+            .Returns<Task<List<TrackerAnnounceResult>>>(_ => throw new InvalidOperationException("Tracker unreachable"));
 
         await Assert.DoesNotThrowAsync(async () => await _subject.StopAsync(CancellationToken.None));
 

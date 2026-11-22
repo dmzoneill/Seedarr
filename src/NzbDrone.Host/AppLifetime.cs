@@ -19,6 +19,9 @@ namespace NzbDrone.Host;
 
 public class AppLifetime : IHostedService, IDisposable
 {
+    private const int StoppedAnnounceParallelism = 32;
+    private static readonly TimeSpan StoppedAnnounceDeadline = TimeSpan.FromSeconds(5);
+
     private readonly IEventAggregator _eventAggregator;
     private readonly ITorrentService _torrentService;
     private readonly IConfigService _configService;
@@ -150,61 +153,8 @@ public class AppLifetime : IHostedService, IDisposable
             }
         }
 
-        // Phase 1: Announce stopped to trackers (inbound listener already halted)
-        _logger.Info("Executing phased shutdown phase 1: announcing stopped to trackers");
-
-        if (_trackerAnnounceService != null && _torrentService != null)
-        {
-            try
-            {
-                var torrents = _torrentService.GetAll() ?? new List<Torrent>();
-                var activeTorrents = torrents.Where(t =>
-                    t.Status == TorrentStatus.Downloading ||
-                    t.Status == TorrentStatus.Seeding ||
-                    t.Active).ToList();
-
-                if (activeTorrents.Count > 0)
-                {
-                    // Use CancellationToken.None so a pre-cancelled host stop token does not skip stopped announces (#953).
-                    var announceTasks = activeTorrents.Select(torrent =>
-                        Task.Run(
-                            () =>
-                            {
-                                try
-                                {
-                                    _trackerAnnounceService.AnnounceTorrent(torrent, force: true, eventType: AnnounceEvent.Stopped);
-                                }
-                                catch (Exception ex)
-                                {
-                                    _logger.Debug(ex, "Failed to send stopped tracker announce for torrent {0}", torrent.Id);
-                                }
-                            },
-                            CancellationToken.None)).ToArray();
-
-                    var allAnnounces = Task.WhenAll(announceTasks);
-                    var timeoutTask = Task.Delay(2500, CancellationToken.None);
-                    try
-                    {
-                        var completed = await Task.WhenAny(allAnnounces, timeoutTask);
-                        if (completed != allAnnounces && !allAnnounces.IsCompleted)
-                        {
-                            _logger.Debug(
-                                "Tracker stopped announces exceeded {0}ms bounded wait; awaiting remaining tasks before later shutdown phases",
-                                2500);
-                            await allAnnounces;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Debug(ex, "Tracker stopped announces awaiting timed out or failed during shutdown");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn(ex, "Error announcing stopped to trackers on shutdown");
-            }
-        }
+        // Durability (FastResume, stats, WAL checkpoint) runs before courtesy stopped-announces.
+        // A slow tracker must not hold the process past the container stop grace period (#1352).
 
         // Phase 2: State & Buffer Serialization
         _logger.Info("Executing phased shutdown phase 2: flushing piece buffers and saving FastResume");
@@ -349,6 +299,23 @@ public class AppLifetime : IHostedService, IDisposable
             }
         }
 
+        if (_trackerAnnounceService != null && _torrentService != null)
+        {
+            try
+            {
+                var torrents = _torrentService.GetAll() ?? new List<Torrent>();
+                var activeTorrents = torrents.Where(t =>
+                    t.Status == TorrentStatus.Downloading ||
+                    t.Status == TorrentStatus.Seeding ||
+                    t.Active).ToList();
+                await AnnounceStoppedAsync(activeTorrents);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Error announcing stopped to trackers on shutdown");
+            }
+        }
+
         try
         {
             LogManager.Flush(TimeSpan.FromSeconds(2));
@@ -356,6 +323,52 @@ public class AppLifetime : IHostedService, IDisposable
         catch (Exception ex)
         {
             _logger.Debug(ex, "Error flushing log targets on shutdown");
+        }
+    }
+
+    private async Task AnnounceStoppedAsync(List<Torrent> activeTorrents)
+    {
+        if (activeTorrents == null || activeTorrents.Count == 0 || _trackerAnnounceService == null)
+        {
+            return;
+        }
+
+        _logger.Info("Executing phased shutdown: announcing stopped for {0} torrent(s) with a {1}s deadline", activeTorrents.Count, StoppedAnnounceDeadline.TotalSeconds);
+
+        // Dedicated token so a host stop token that is already cancelled still sends announces (#953),
+        // while the deadline still cancels whatever is left.
+        using var deadline = new CancellationTokenSource(StoppedAnnounceDeadline);
+        var options = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = StoppedAnnounceParallelism,
+            CancellationToken = deadline.Token
+        };
+
+        try
+        {
+            await Parallel.ForEachAsync(activeTorrents, options, async (torrent, token) =>
+            {
+                try
+                {
+                    await _trackerAnnounceService.AnnounceTorrentAsync(
+                        torrent,
+                        force: true,
+                        eventType: AnnounceEvent.Stopped,
+                        cancellationToken: token);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Deadline or caller cancellation; remaining torrents are abandoned.
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to send stopped tracker announce for torrent {0}", torrent.Id);
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.Debug("Stopped tracker announces cancelled after {0}s deadline", StoppedAnnounceDeadline.TotalSeconds);
         }
     }
 

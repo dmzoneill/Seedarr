@@ -17,6 +17,9 @@ services:
       - ./data/series:/series:z
       - ./tests/fixtures:/app/fixtures:ro,z
     restart: unless-stopped
+    # Shutdown saves FastResume and checkpoints the WAL before a short stopped-announce deadline.
+    # 30s covers that work; the engine default of 10s can SIGKILL before durability finishes.
+    stop_grace_period: 30s
     environment:
       - TZ=UTC
       - COVERAGE_ENABLED=${COVERAGE_ENABLED:-1}

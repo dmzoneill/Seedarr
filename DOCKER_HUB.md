@@ -102,6 +102,7 @@ services:
     # image: ghcr.io/dmzoneill/seedarr:latest
     container_name: seedarr
     restart: unless-stopped
+    stop_grace_period: 30s
     ports:
       - "9898:9898"       # Web UI & REST API
     volumes:
