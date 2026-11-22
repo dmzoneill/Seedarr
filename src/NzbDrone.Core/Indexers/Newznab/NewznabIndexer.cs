@@ -122,35 +122,7 @@ public class NewznabIndexer : IIndexer
 
     private void EnsureProxyClient()
     {
-        if (_proxySettingsProvider == null || !_proxySettingsProvider.IsEnabled)
-        {
-            lock (_syncLock)
-            {
-                _lastProxyEnabled = false;
-                _proxyClient = null;
-                _proxyHandler = null;
-            }
-            return;
-        }
-
-        lock (_syncLock)
-        {
-            var host = _proxySettingsProvider.Host;
-            var port = _proxySettingsProvider.Port;
-            var type = _proxySettingsProvider.Type;
-
-            if (_proxyClient == null || !_lastProxyEnabled || _lastProxyHost != host || _lastProxyPort != port || _lastProxyType != type)
-            {
-                _proxyHandler = _proxySettingsProvider.CreateHandler();
-                _proxyClient = _proxyHandler != null
-                    ? new HttpClient(_proxyHandler)
-                    : DefaultClient;
-                _lastProxyEnabled = true;
-                _lastProxyHost = host;
-                _lastProxyPort = port;
-                _lastProxyType = type;
-            }
-        }
+        IndexerProxyClient.Ensure(_proxySettingsProvider, _syncLock, ref _proxyClient, ref _proxyHandler, ref _lastProxyEnabled, ref _lastProxyHost, ref _lastProxyPort, ref _lastProxyType, DefaultClient);
     }
 
     public bool TestConnection(IndexerDefinition definition)
