@@ -73,6 +73,8 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     private readonly IClientBehaviorSimulator _clientBehaviorSimulator;
     private readonly IVpnKillSwitchService _vpnKillSwitchService;
     private readonly IClientProfileFactory _clientProfileFactory;
+    private readonly IPieceBoundaryMasker _pieceBoundaryMasker;
+    private readonly ITorrentFileService _torrentFileService;
     private readonly ConcurrentDictionary<int, bool> _completedTorrents = new();
     private readonly ConcurrentDictionary<int, List<List<string>>> _torrentTierOrder = new();
     private readonly ConcurrentQueue<Torrent> _staggeredQueue = new();
@@ -98,7 +100,9 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         ITorrentService torrentService = null,
         IClientBehaviorSimulator clientBehaviorSimulator = null,
         IVpnKillSwitchService vpnKillSwitchService = null,
-        IClientProfileFactory clientProfileFactory = null)
+        IClientProfileFactory clientProfileFactory = null,
+        IPieceBoundaryMasker pieceBoundaryMasker = null,
+        ITorrentFileService torrentFileService = null)
     {
         _trackerEntryService = trackerEntryService;
         _multiTracker = multiTracker;
@@ -111,6 +115,8 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         _clientBehaviorSimulator = clientBehaviorSimulator;
         _vpnKillSwitchService = vpnKillSwitchService;
         _clientProfileFactory = clientProfileFactory;
+        _pieceBoundaryMasker = pieceBoundaryMasker ?? new PieceBoundaryMasker();
+        _torrentFileService = torrentFileService;
         _logger = LogManager.GetCurrentClassLogger();
 
         if (_torrentService != null)
@@ -134,6 +140,42 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 _logger.Debug(ex, "Failed to load initial completed torrents");
             }
         }
+    }
+
+    private long CalculateAnnounceLeft(Torrent torrent, AnnounceEvent announceEvent)
+    {
+        if (torrent == null)
+        {
+            return 0;
+        }
+
+        // Completed, force-completed, and every later announce agree: nothing
+        // wanted remains. Progress is measured against the wanted set, so a
+        // selective download at 100% must keep left at 0 even though unwanted
+        // files make TotalSize - Downloaded positive.
+        if (announceEvent == AnnounceEvent.Completed || torrent.Progress >= 1.0 || torrent.ForceCompleted)
+        {
+            return 0;
+        }
+
+        var wanted = ResolveWantedSize(torrent);
+        return Math.Max(0L, wanted - Math.Max(0L, torrent.Downloaded));
+    }
+
+    private long ResolveWantedSize(Torrent torrent)
+    {
+        var files = torrent.Files;
+        if ((files == null || files.Count == 0) && _torrentFileService != null && torrent.Id > 0)
+        {
+            files = _torrentFileService.GetByTorrentId(torrent.Id);
+        }
+
+        if (files != null && files.Count > 0 && _pieceBoundaryMasker.IsSelectiveDownload(files))
+        {
+            return _pieceBoundaryMasker.CalculateWantedSize(torrent, files);
+        }
+
+        return Math.Max(0L, torrent.TotalSize);
     }
 
     private static bool IsRateLimited(TrackerEntry entry, bool isFirstAnnounce, out int minIntervalSeconds, out int retryAfter)
@@ -328,7 +370,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             .Select(tier => tier.Select(e => e.Url).ToList())
             .ToList();
 
-        var left = announceEvent == AnnounceEvent.Completed ? 0 : Math.Max(0, torrent.TotalSize - torrent.Downloaded);
+        var left = CalculateAnnounceLeft(torrent, announceEvent);
         var eventName = announceEvent != AnnounceEvent.None ? announceEvent.ToString().ToLowerInvariant() : "regular";
         var primaryTrackerUrl = primaryUrl ?? announceList.FirstOrDefault()?.FirstOrDefault();
 
@@ -787,7 +829,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             announceEvent = AnnounceEvent.None;
         }
 
-        var left = announceEvent == AnnounceEvent.Completed ? 0 : Math.Max(0, torrent.TotalSize - torrent.Downloaded);
+        var left = CalculateAnnounceLeft(torrent, announceEvent);
         var eventName = announceEvent != AnnounceEvent.None ? announceEvent.ToString().ToLowerInvariant() : "regular";
 
         var isSimulated = torrent.IsSimulated || (_configService != null && _configService.SimulationModeEnabled);
