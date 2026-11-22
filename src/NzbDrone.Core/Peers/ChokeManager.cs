@@ -41,7 +41,7 @@ public class ChokeManager : BackgroundService, IChokeManager
     {
         get
         {
-            lock (_lock)
+            using (EnterLock())
             {
                 return _currentOptimisticPeerKey;
             }
@@ -68,6 +68,8 @@ public class ChokeManager : BackgroundService, IChokeManager
     private readonly object _lock = new();
     private readonly HashSet<string> _explicitSeedingTorrents = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, OptimisticSlot> _optimisticSlots = new(StringComparer.OrdinalIgnoreCase);
+    private int _lockDepth;
+    private List<Action> _afterLock;
     private string _currentOptimisticPeerKey;
 
     private DateTime _lastRegularUnchoke = DateTime.MinValue;
@@ -133,7 +135,7 @@ public class ChokeManager : BackgroundService, IChokeManager
 
     public void ProcessRegularUnchoke()
     {
-        lock (_lock)
+        using (EnterLock())
         {
             var connections = _connectionManager.GetAllConnections();
             if (connections.Count == 0)
@@ -359,7 +361,7 @@ public class ChokeManager : BackgroundService, IChokeManager
 
     public void ProcessOptimisticUnchoke()
     {
-        lock (_lock)
+        using (EnterLock())
         {
             var connections = _connectionManager.GetAllConnections();
             if (connections.Count == 0)
@@ -393,7 +395,7 @@ public class ChokeManager : BackgroundService, IChokeManager
             return;
         }
 
-        lock (_lock)
+        using (EnterLock())
         {
             ProcessOptimisticUnchokeForSwarmInternal(infoHash, null, advanceRound: false);
         }
@@ -412,7 +414,7 @@ public class ChokeManager : BackgroundService, IChokeManager
             return;
         }
 
-        lock (_lock)
+        using (EnterLock())
         {
             var infoHash = connection.InfoHash;
             if (connection.IsOptimisticUnchoked)
@@ -443,7 +445,7 @@ public class ChokeManager : BackgroundService, IChokeManager
             return;
         }
 
-        lock (_lock)
+        using (EnterLock())
         {
             if (connection.IsSeed || connection.IsPartialSeed || !connection.HasMissingWantedPieces)
             {
@@ -521,7 +523,7 @@ public class ChokeManager : BackgroundService, IChokeManager
 
         connection.IsSeed = true;
 
-        lock (_lock)
+        using (EnterLock())
         {
             if (!connection.AmChoking)
             {
@@ -553,7 +555,7 @@ public class ChokeManager : BackgroundService, IChokeManager
 
         connection.IsPartialSeed = true;
 
-        lock (_lock)
+        using (EnterLock())
         {
             if (!connection.AmChoking)
             {
@@ -604,7 +606,7 @@ public class ChokeManager : BackgroundService, IChokeManager
             return false;
         }
 
-        lock (_lock)
+        using (EnterLock())
         {
             var maxUploadSlots = _connectionManager != null
                 ? _connectionManager.GetDynamicUploadSlotCount(infoHash)
@@ -633,7 +635,7 @@ public class ChokeManager : BackgroundService, IChokeManager
             return false;
         }
 
-        lock (_lock)
+        using (EnterLock())
         {
             if (_explicitSeedingTorrents.Contains(infoHash))
             {
@@ -667,7 +669,7 @@ public class ChokeManager : BackgroundService, IChokeManager
             return;
         }
 
-        lock (_lock)
+        using (EnterLock())
         {
             if (isSeeding)
             {
@@ -687,7 +689,7 @@ public class ChokeManager : BackgroundService, IChokeManager
             return;
         }
 
-        lock (_lock)
+        using (EnterLock())
         {
             if (!CanUnchoke(infoHash))
             {
@@ -955,22 +957,25 @@ public class ChokeManager : BackgroundService, IChokeManager
             connection.LastRequestReceived = DateTime.UtcNow;
             try
             {
-                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
-                _logger.Trace("Sent UNCHOKE to peer {0}:{1}", connection.RemoteIp, connection.RemotePort);
+                connection.PostMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+                _logger.Trace("Queued UNCHOKE to peer {0}:{1}", connection.RemoteIp, connection.RemotePort);
             }
             catch (Exception ex)
             {
-                _logger.Debug(ex, "Failed to send unchoke to {0}:{1}", connection.RemoteIp, connection.RemotePort);
+                _logger.Debug(ex, "Failed to queue unchoke to {0}:{1}", connection.RemoteIp, connection.RemotePort);
             }
 
-            try
+            DeferAfterLock(() =>
             {
-                PeerUnchoked?.Invoke(connection);
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex, "Failed to notify PeerUnchoked for {0}:{1}", connection.RemoteIp, connection.RemotePort);
-            }
+                try
+                {
+                    PeerUnchoked?.Invoke(connection);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to notify PeerUnchoked for {0}:{1}", connection.RemoteIp, connection.RemotePort);
+                }
+            });
         }
     }
 
@@ -986,12 +991,12 @@ public class ChokeManager : BackgroundService, IChokeManager
             connection.AmChoking = true;
             try
             {
-                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Choke });
-                _logger.Trace("Sent CHOKE to peer {0}:{1}", connection.RemoteIp, connection.RemotePort);
+                connection.PostMessage(new PeerMessage { Type = PeerMessageType.Choke });
+                _logger.Trace("Queued CHOKE to peer {0}:{1}", connection.RemoteIp, connection.RemotePort);
             }
             catch (Exception ex)
             {
-                _logger.Debug(ex, "Failed to send choke to {0}:{1}", connection.RemoteIp, connection.RemotePort);
+                _logger.Debug(ex, "Failed to queue choke to {0}:{1}", connection.RemoteIp, connection.RemotePort);
             }
 
             if (connection.SupportsFastExtension)
@@ -1041,7 +1046,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                     BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(4, 4), req.Begin);
                     BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(8, 4), req.Length);
 
-                    connection.SendMessage(new PeerMessage
+                    connection.PostMessage(new PeerMessage
                     {
                         Type = PeerMessageType.RejectRequest,
                         Payload = payload
@@ -1211,6 +1216,88 @@ public class ChokeManager : BackgroundService, IChokeManager
             }
 
             return a.ConnectedAt.CompareTo(b.ConnectedAt);
+        }
+    }
+
+    private ChokeLock EnterLock()
+    {
+        Monitor.Enter(_lock);
+        var outermost = _lockDepth == 0;
+        if (outermost)
+        {
+            _afterLock = new List<Action>();
+        }
+
+        _lockDepth++;
+        return new ChokeLock(this, outermost);
+    }
+
+    private void DeferAfterLock(Action action)
+    {
+        if (action == null)
+        {
+            return;
+        }
+
+        if (_afterLock != null)
+        {
+            _afterLock.Add(action);
+            return;
+        }
+
+        action();
+    }
+
+    private void RunAfterLock(List<Action> actions)
+    {
+        if (actions == null)
+        {
+            return;
+        }
+
+        foreach (var action in actions)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "ChokeManager post-lock action failed");
+            }
+        }
+    }
+
+    private sealed class ChokeLock : IDisposable
+    {
+        private readonly ChokeManager _manager;
+        private readonly bool _outermost;
+        private bool _disposed;
+
+        public ChokeLock(ChokeManager manager, bool outermost)
+        {
+            _manager = manager;
+            _outermost = outermost;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            List<Action> after = null;
+            _manager._lockDepth--;
+            if (_outermost)
+            {
+                after = _manager._afterLock;
+                _manager._afterLock = null;
+            }
+
+            Monitor.Exit(_manager._lock);
+            _manager.RunAfterLock(after);
         }
     }
 

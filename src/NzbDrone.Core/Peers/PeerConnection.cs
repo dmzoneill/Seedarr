@@ -10,6 +10,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Bandwidth;
@@ -31,10 +32,23 @@ public class PeerConnection : IDisposable
     private readonly TcpClient _client;
     private readonly Stream _networkStream;
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
-    private readonly object _writeLock = new();
     private readonly object _disposeLock = new();
+
+    // AllowSynchronousContinuations is false so enqueue never runs socket I/O on the caller.
+    // Choke decisions call PostMessage while ChokeManager may still hold its lock.
+    private readonly Channel<OutboundFrame> _outbound = Channel.CreateBounded<OutboundFrame>(
+        new BoundedChannelOptions(OutboundQueueCapacity)
+        {
+            SingleReader = true,
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.Wait,
+            AllowSynchronousContinuations = false
+        });
     private bool _isDisposed;
     private Stream _activeStream;
+    private CancellationTokenSource _writerCts;
+    private Task _writerTask;
+    private int _writerStarted;
 
     public string RemoteIp { get; }
     public int RemotePort { get; }
@@ -44,6 +58,8 @@ public class PeerConnection : IDisposable
     public IClientProfile ClientProfile { get; set; }
     public int? ExpectedInfoHashLength { get; set; }
     public const int OutgoingConnectTimeoutMs = 5000;
+    public const int DefaultSocketWriteTimeoutMs = 30_000;
+    public const int OutboundQueueCapacity = 32;
     private static IBandwidthLimiter _defaultBandwidthLimiter = NzbDrone.Core.Bandwidth.BandwidthLimiter.Instance;
 
     public static IBandwidthLimiter DefaultBandwidthLimiter
@@ -96,6 +112,8 @@ public class PeerConnection : IDisposable
     public DateTime LastActivity { get; set; }
     public int HandshakeTimeoutMs { get; set; }
     public int MessageReadTimeoutMs { get; set; }
+
+    public int WriteTimeoutMs { get; set; } = DefaultSocketWriteTimeoutMs;
     public int KeepAliveIntervalSeconds { get; set; } = 120;
     public int MaxPipelinedRequests { get; set; } = 200;
 
@@ -721,6 +739,7 @@ public class PeerConnection : IDisposable
         }
 
         ApplySocketOptions(_client, 0, 0);
+        ApplyWriteTimeout();
 
         ConnectedAt = DateTime.UtcNow;
         LastActivity = DateTime.UtcNow;
@@ -733,6 +752,7 @@ public class PeerConnection : IDisposable
         _activeStream = _networkStream;
         RemoteIp = remoteIp;
         RemotePort = remotePort;
+        ApplyWriteTimeout();
         ConnectedAt = DateTime.UtcNow;
         LastActivity = DateTime.UtcNow;
     }
@@ -795,6 +815,7 @@ public class PeerConnection : IDisposable
             }
 
             _activeStream = _networkStream;
+            ApplyWriteTimeout();
             RemoteIp = host;
             RemotePort = port;
             ConnectedAt = DateTime.UtcNow;
@@ -1142,8 +1163,10 @@ public class PeerConnection : IDisposable
             }
 
             var handshake = BuildHandshake(infoHash, peerId, isPrivate, clientProfile, supportsExtensions, supportsFast, supportsDht, supportsV2);
-            _activeStream.Write(handshake, 0, handshake.Length);
-            _activeStream.Flush();
+            if (!SendRaw(handshake, handshake.Length, wait: true))
+            {
+                return false;
+            }
             InfoHash = infoHash;
             if (infoHash.Length == 64)
             {
@@ -1322,9 +1345,30 @@ public class PeerConnection : IDisposable
 
     public virtual void SendMessage(PeerMessage message)
     {
+        SendQueued(message, wait: true);
+    }
+
+    /// <summary>
+    /// Enqueues a message and returns without waiting for the socket write.
+    /// Safe to call while holding a lock: the bounded queue never performs network I/O.
+    /// The single writer drains the queue and disconnects the peer if the queue is full or a write times out.
+    /// </summary>
+    public virtual void PostMessage(PeerMessage message)
+    {
+        SendQueued(message, wait: false);
+    }
+
+    private void SendQueued(PeerMessage message, bool wait)
+    {
+        if (message == null || _isDisposed)
+        {
+            return;
+        }
+
         var length = message.Length;
         var bufferSize = 4 + length;
         var buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
+        var queued = false;
         try
         {
             buffer[0] = (byte)(length >> 24);
@@ -1339,46 +1383,198 @@ public class PeerConnection : IDisposable
                 Array.Copy(message.Payload, 0, buffer, 5, payloadLength);
             }
 
-            lock (_writeLock)
+            var completion = wait
+                ? new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
+                : null;
+            EnqueueOrThrow(new OutboundFrame
             {
-                if (_isDisposed)
-                {
-                    return;
-                }
-
-                var hasLimiterUpload = BandwidthLimiter != null && BandwidthLimiter.HasUploadLimit(InfoHash, PeerId);
-                if ((_uploadRateLimit > 0 || hasLimiterUpload) && bufferSize > _pacingChunkSize)
-                {
-                    WritePaced(buffer, bufferSize);
-                }
-                else
-                {
-                    if (hasLimiterUpload)
-                    {
-                        BandwidthLimiter.ConsumeUpload(InfoHash, PeerId, bufferSize);
-                    }
-
-                    _activeStream.Write(buffer, 0, bufferSize);
-                    _activeStream.Flush();
-                }
-            }
-
-            LastActivity = DateTime.UtcNow;
-            MessageSent?.Invoke(this, message);
+                Buffer = buffer,
+                Count = bufferSize,
+                Completion = completion,
+                Message = message
+            });
+            queued = true;
+            completion?.Task.GetAwaiter().GetResult();
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(buffer);
+            if (!queued)
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
     }
 
-    private void WritePaced(byte[] buffer, int count)
+    private bool SendRaw(byte[] data, int count, bool wait)
+    {
+        if (data == null || count <= 0 || _isDisposed)
+        {
+            return false;
+        }
+
+        var buffer = ArrayPool<byte>.Shared.Rent(count);
+        var queued = false;
+        try
+        {
+            Array.Copy(data, 0, buffer, 0, count);
+            var completion = wait
+                ? new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
+                : null;
+            EnqueueOrThrow(new OutboundFrame
+            {
+                Buffer = buffer,
+                Count = count,
+                Completion = completion
+            });
+            queued = true;
+            completion?.Task.GetAwaiter().GetResult();
+            return true;
+        }
+        finally
+        {
+            if (!queued)
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+        }
+    }
+
+    private void EnqueueOrThrow(OutboundFrame frame)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+
+        if (!_outbound.Writer.TryWrite(frame))
+        {
+            Dispose();
+            throw new IOException($"Peer {RemoteIp}:{RemotePort} outbound queue is full");
+        }
+
+        EnsureWriter();
+    }
+
+    private void EnsureWriter()
+    {
+        if (Volatile.Read(ref _writerStarted) == 1)
+        {
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref _writerStarted, 1, 0) != 0)
+        {
+            return;
+        }
+
+        _writerCts = new CancellationTokenSource();
+
+        // The caller may hold ChokeManager's lock. Keep the socket write off this thread.
+        _writerTask = Task.Run(() => WriterLoopAsync(_writerCts.Token));
+    }
+
+    private async Task WriterLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (await _outbound.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                while (_outbound.Reader.TryRead(out var frame))
+                {
+                    var fatal = await WriteFrameAsync(frame, cancellationToken).ConfigureAwait(false);
+                    if (fatal || _isDisposed)
+                    {
+                        FailQueued(new IOException($"Peer {RemoteIp}:{RemotePort} writer stopped"));
+                        return;
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            FailQueued(new ObjectDisposedException(nameof(PeerConnection)));
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Peer writer failed for {0}:{1}", RemoteIp, RemotePort);
+            FailQueued(ex);
+        }
+    }
+
+    private async Task<bool> WriteFrameAsync(OutboundFrame frame, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (_isDisposed || frame?.Buffer == null || frame.Count <= 0)
+            {
+                frame?.Completion?.TrySetResult(true);
+                return _isDisposed;
+            }
+
+            await WriteBufferAsync(frame.Buffer, frame.Count, cancellationToken).ConfigureAwait(false);
+            LastActivity = DateTime.UtcNow;
+            if (frame.Message != null)
+            {
+                try
+                {
+                    MessageSent?.Invoke(this, frame.Message);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "MessageSent handler failed for peer {0}:{1}", RemoteIp, RemotePort);
+                    frame.Completion?.TrySetException(ex);
+                    return false;
+                }
+            }
+
+            frame.Completion?.TrySetResult(true);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            if (!_isDisposed)
+            {
+                _logger.Debug(ex, "Disconnecting peer {0}:{1} after write failure", RemoteIp, RemotePort);
+                Dispose();
+            }
+
+            // Complete only after disconnect so waiters observe a closed peer.
+            frame?.Completion?.TrySetException(ex);
+            return true;
+        }
+        finally
+        {
+            if (frame?.Buffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(frame.Buffer);
+                frame.Buffer = null;
+            }
+        }
+    }
+
+    private async Task WriteBufferAsync(byte[] buffer, int count, CancellationToken cancellationToken)
+    {
+        ApplyWriteTimeout();
+        var hasLimiterUpload = BandwidthLimiter != null && BandwidthLimiter.HasUploadLimit(InfoHash, PeerId);
+        if ((_uploadRateLimit > 0 || hasLimiterUpload) && count > _pacingChunkSize)
+        {
+            await WritePacedAsync(buffer, count, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (hasLimiterUpload)
+        {
+            BandwidthLimiter.ConsumeUpload(InfoHash, PeerId, count);
+        }
+
+        await WriteSliceAsync(buffer, 0, count, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task WritePacedAsync(byte[] buffer, int count, CancellationToken cancellationToken)
     {
         var offset = 0;
         var chunkSize = _pacingChunkSize > 0 ? _pacingChunkSize : DefaultPacingChunkSize;
 
         while (offset < count && !_isDisposed)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var slice = Math.Min(chunkSize, count - offset);
             var sliceStart = Stopwatch.GetTimestamp();
 
@@ -1387,15 +1583,85 @@ public class PeerConnection : IDisposable
                 BandwidthLimiter.ConsumeUpload(InfoHash, PeerId, slice);
             }
 
-            _activeStream.Write(buffer, offset, slice);
-            _activeStream.Flush();
+            await WriteSliceAsync(buffer, offset, slice, cancellationToken).ConfigureAwait(false);
             offset += slice;
 
             if (offset < count && _uploadRateLimit > 0)
             {
                 var targetTicks = (long)((double)slice * Stopwatch.Frequency / _uploadRateLimit);
-                OnWriteChunkPaced?.Invoke(slice, targetTicks);
+                try
+                {
+                    OnWriteChunkPaced?.Invoke(slice, targetTicks);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Write pace observer failed for peer {0}:{1}", RemoteIp, RemotePort);
+                }
+
                 PaceWaitHandler(sliceStart, targetTicks);
+            }
+        }
+    }
+
+    private async Task WriteSliceAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var timeoutMs = GetWriteTimeoutMs();
+        timeoutCts.CancelAfter(timeoutMs);
+        try
+        {
+            await _activeStream.WriteAsync(buffer.AsMemory(offset, count), timeoutCts.Token).ConfigureAwait(false);
+            await _activeStream.FlushAsync(timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"Write to peer {RemoteIp}:{RemotePort} timed out after {timeoutMs}ms");
+        }
+    }
+
+    private void FailQueued(Exception error)
+    {
+        while (_outbound.Reader.TryRead(out var frame))
+        {
+            if (frame?.Buffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(frame.Buffer);
+                frame.Buffer = null;
+            }
+
+            frame?.Completion?.TrySetException(error);
+        }
+    }
+
+    private int GetWriteTimeoutMs()
+    {
+        return WriteTimeoutMs > 0 ? WriteTimeoutMs : DefaultSocketWriteTimeoutMs;
+    }
+
+    private void ApplyWriteTimeout()
+    {
+        var timeoutMs = GetWriteTimeoutMs();
+        if (_client?.Client != null)
+        {
+            try
+            {
+                _client.Client.SendTimeout = timeoutMs;
+            }
+            catch (Exception ex) when (ex is SocketException || ex is ObjectDisposedException || ex is InvalidOperationException)
+            {
+                _logger.Trace(ex, "Failed to set SendTimeout for peer {0}:{1}", RemoteIp, RemotePort);
+            }
+        }
+
+        if (_activeStream != null && _activeStream.CanTimeout)
+        {
+            try
+            {
+                _activeStream.WriteTimeout = timeoutMs;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException || ex is ObjectDisposedException || ex is IOException)
+            {
+                _logger.Trace(ex, "Failed to set WriteTimeout for peer {0}:{1}", RemoteIp, RemotePort);
             }
         }
     }
@@ -1436,18 +1702,10 @@ public class PeerConnection : IDisposable
     public void SendKeepAlive()
     {
         var buffer = new byte[4];
-        lock (_writeLock)
+        if (!SendRaw(buffer, 4, wait: true))
         {
-            if (_isDisposed)
-            {
-                return;
-            }
-
-            _activeStream.Write(buffer, 0, 4);
-            _activeStream.Flush();
+            return;
         }
-
-        LastActivity = DateTime.UtcNow;
     }
 
     internal ArrayPool<byte> BufferPool { get; set; } = ArrayPool<byte>.Shared;
@@ -2401,6 +2659,7 @@ public class PeerConnection : IDisposable
 
     public void Dispose()
     {
+        CancellationTokenSource writerCts;
         lock (_disposeLock)
         {
             if (_isDisposed)
@@ -2411,6 +2670,7 @@ public class PeerConnection : IDisposable
             _isDisposed = true;
             PendingRequestCount = 0;
             IncomingRequestCount = 0;
+            writerCts = _writerCts;
 
             if (BandwidthLimiter != null && !string.IsNullOrEmpty(_peerId))
             {
@@ -2425,6 +2685,25 @@ public class PeerConnection : IDisposable
             _networkStream?.Dispose();
             _client?.Dispose();
         }
+
+        try
+        {
+            writerCts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Writer CTS is disposed with the connection.
+        }
+
+        _outbound.Writer.TryComplete();
+    }
+
+    private sealed class OutboundFrame
+    {
+        public byte[] Buffer;
+        public int Count;
+        public TaskCompletionSource<bool> Completion;
+        public PeerMessage Message;
     }
 }
 

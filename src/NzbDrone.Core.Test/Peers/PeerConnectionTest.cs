@@ -2253,4 +2253,126 @@ public class PeerConnectionTest
         Assert.That(serverTask.Wait(TimeSpan.FromSeconds(3)), Is.True);
         Assert.That(conn.IsConnected, Is.True);
     }
+
+    [Test]
+    public void Tcp_connections_use_a_bounded_send_timeout()
+    {
+        var (client, _) = CreateTestPair();
+        var tcp = (TcpClient)typeof(PeerConnection)
+            .GetField("_client", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .GetValue(client);
+
+        Assert.That(tcp.Client.SendTimeout, Is.EqualTo(PeerConnection.DefaultSocketWriteTimeoutMs));
+    }
+
+    [Test]
+    [CancelAfter(10000)]
+    public void SendMessage_to_a_stalled_peer_does_not_block_other_peers()
+    {
+        var stall = new StallStream();
+        var otherStream = new MemoryStream();
+        var stalled = new PeerConnection(stall, "10.0.0.8", 4101)
+        {
+            WriteTimeoutMs = 60_000
+        };
+        var other = new PeerConnection(otherStream, "10.0.0.9", 4102);
+        _connections.Add(stalled);
+        _connections.Add(other);
+
+        Task blocked = null;
+        try
+        {
+            blocked = Task.Run(() => stalled.SendMessage(new PeerMessage
+            {
+                Type = PeerMessageType.Piece,
+                Payload = new byte[32],
+                PayloadLength = 32
+            }));
+
+            Assert.That(() => stall.WriteEntered > 0, Is.True.After(3000, 10));
+
+            var started = System.Diagnostics.Stopwatch.StartNew();
+            other.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+            started.Stop();
+
+            Assert.That(started.Elapsed, Is.LessThan(TimeSpan.FromSeconds(2)));
+            Assert.That(otherStream.Length, Is.EqualTo(5));
+            Assert.That(blocked.IsCompleted, Is.False);
+        }
+        finally
+        {
+            stall.Release();
+            try
+            {
+                blocked?.Wait(TimeSpan.FromSeconds(2));
+            }
+            catch (AggregateException)
+            {
+            }
+        }
+    }
+
+    [Test]
+    [CancelAfter(10000)]
+    public void SendMessage_times_out_and_disconnects_when_the_peer_never_reads()
+    {
+        var stall = new StallStream();
+        var conn = new PeerConnection(stall, "10.0.0.10", 4103)
+        {
+            WriteTimeoutMs = 200
+        };
+        _connections.Add(conn);
+
+        var error = Assert.Throws<TimeoutException>(() => conn.SendMessage(new PeerMessage { Type = PeerMessageType.Choke }));
+
+        Assert.That(error.Message, Does.Contain("timed out"));
+        Assert.That(conn.IsDisposed, Is.True);
+        stall.Release();
+    }
+
+    private sealed class StallStream : MemoryStream
+    {
+        private readonly ManualResetEventSlim _release = new(false);
+
+        private int _writeEntered;
+
+        public int WriteEntered => Volatile.Read(ref _writeEntered);
+
+        public void Release()
+        {
+            _release.Set();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            Block();
+        }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            Block(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.CompletedTask;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            _release.Set();
+            base.Dispose(disposing);
+        }
+
+        private void Block(CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _writeEntered);
+            while (!_release.IsSet)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                Thread.Sleep(10);
+            }
+        }
+    }
 }

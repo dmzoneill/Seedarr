@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
@@ -826,7 +828,13 @@ public class ChokeManagerTest
         peer.AllowedFastPieces.Add(5);
 
         var sentMessages = new List<PeerMessage>();
-        peer.MessageSent += (c, msg) => sentMessages.Add(msg);
+        peer.MessageSent += (c, msg) =>
+        {
+            lock (sentMessages)
+            {
+                sentMessages.Add(msg);
+            }
+        };
 
         peer.PendingIncomingRequests.Add(new PeerRequest(3, 0, 16384));
         peer.PendingIncomingRequests.Add(new PeerRequest(5, 0, 16384));
@@ -834,9 +842,20 @@ public class ChokeManagerTest
         _subject.Choke(peer);
 
         Assert.That(peer.AmChoking, Is.True);
-        Assert.That(sentMessages.Any(m => m.Type == PeerMessageType.Choke), Is.True);
+        Assert.That(() =>
+        {
+            lock (sentMessages)
+            {
+                return sentMessages.Any(m => m.Type == PeerMessageType.Choke)
+                    && sentMessages.Count(m => m.Type == PeerMessageType.RejectRequest) == 1;
+            }
+        }, Is.True.After(2000, 20));
 
-        var rejectMessages = sentMessages.Where(m => m.Type == PeerMessageType.RejectRequest).ToList();
+        List<PeerMessage> rejectMessages;
+        lock (sentMessages)
+        {
+            rejectMessages = sentMessages.Where(m => m.Type == PeerMessageType.RejectRequest).ToList();
+        }
         Assert.That(rejectMessages.Count, Is.EqualTo(1));
 
         var rejectMsg = rejectMessages[0];
@@ -1022,5 +1041,116 @@ public class ChokeManagerTest
         Assert.That(peer.LastBlockReceived, Is.EqualTo(now));
         Assert.That(peer.LastPieceReceived, Is.EqualTo(now));
         Assert.That(peer.IsSnubbed, Is.False);
+    }
+
+    [Test]
+    [CancelAfter(15000)]
+    public void Stalled_peer_write_does_not_block_other_peers()
+    {
+        var stall = new StallStream();
+        var otherStream = new MemoryStream();
+        var stalled = new PeerConnection(stall, "10.0.0.1", 4001)
+        {
+            InfoHash = "hashStall",
+            PeerInterested = true,
+            AmChoking = false,
+            WriteTimeoutMs = 60_000
+        };
+        var other = new PeerConnection(otherStream, "10.0.0.2", 4002)
+        {
+            InfoHash = "hashOther",
+            PeerInterested = true,
+            AmChoking = true,
+            WriteTimeoutMs = 5_000
+        };
+        _connections.Add(stalled);
+        _connections.Add(other);
+        _configService.MaxUploadSlots.Returns(0);
+
+        Task upload = null;
+        try
+        {
+            upload = Task.Run(() => stalled.SendMessage(new PeerMessage
+            {
+                Type = PeerMessageType.Piece,
+                Payload = new byte[64],
+                PayloadLength = 64
+            }));
+
+            Assert.That(() => stall.WriteEntered > 0, Is.True.After(3000, 10));
+
+            var chokeStalled = Task.Run(() => _subject.PeerBecameSeed(stalled));
+            var interested = Task.Run(() => _subject.PeerInterestedChanged(other));
+
+            Assert.That(chokeStalled.Wait(TimeSpan.FromSeconds(2)), Is.True,
+                "Choking the stalled peer must not wait on its socket write");
+            Assert.That(interested.Wait(TimeSpan.FromSeconds(2)), Is.True,
+                "An unrelated peer's INTERESTED handling must not wait on the stalled write");
+            Assert.That(upload.IsCompleted, Is.False, "The stalled peer write must still be blocked");
+            Assert.That(other.AmChoking, Is.False);
+            Assert.That(() => otherStream.Length >= 5, Is.True.After(2000, 10),
+                "The unrelated peer must receive its unchoke while the stalled write is still blocked");
+        }
+        finally
+        {
+            stall.Release();
+            try
+            {
+                upload?.Wait(TimeSpan.FromSeconds(2));
+            }
+            catch (AggregateException)
+            {
+                // The stalled write can surface a dispose/timeout once the gate opens during cleanup.
+            }
+
+            stalled.Dispose();
+            other.Dispose();
+        }
+    }
+
+    private sealed class StallStream : MemoryStream
+    {
+        private readonly ManualResetEventSlim _release = new(false);
+
+        private int _writeEntered;
+
+        public int WriteEntered => Volatile.Read(ref _writeEntered);
+
+        public void Release()
+        {
+            _release.Set();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            Block();
+        }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            Block(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.CompletedTask;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            _release.Set();
+            base.Dispose(disposing);
+        }
+
+        private void Block(CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _writeEntered);
+            while (!_release.IsSet)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                Thread.Sleep(10);
+            }
+        }
     }
 }
