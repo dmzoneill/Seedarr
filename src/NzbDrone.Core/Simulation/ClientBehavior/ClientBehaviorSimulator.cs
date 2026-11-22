@@ -71,13 +71,11 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
     {
         if (isPrivateTorrent)
         {
-            _logger.Trace("Private torrent detected: suppressing client identity rotation and locking to primary client");
-            lock (_lock)
-            {
-                _currentProfile = GetDefaultProfile();
-                _lastProfileSwitchTime = _clock.UtcNow;
-                return _currentProfile;
-            }
+            // Return the primary client for this call only. Per-torrent sessions pin
+            // private torrents themselves; writing the shared profile here would pin
+            // every later public torrent and restart the switch cooldown.
+            _logger.Trace("Private torrent detected: returning primary client without changing the shared profile");
+            return GetDefaultProfile();
         }
 
         if (!_configService.ClientBehaviorEngineEnabled)
