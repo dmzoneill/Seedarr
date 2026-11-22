@@ -28,7 +28,7 @@ using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
 
-public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<VpnInterfaceRestoredEvent>, IHandle<VpnRestoredEvent>, IHandle<TorrentAddedEvent>, IHandle<TorrentUpdatedEvent>, IHandle<TorrentDeletedEvent>, IHandle<PeerRequestRejectedEvent>, IHandle<TorrentDownloadCompletedEvent>, IHandle<TorrentFinishedEvent>, IHandle<TorrentStatusChangedEvent>
+public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<VpnInterfaceRestoredEvent>, IHandle<VpnRestoredEvent>, IHandle<ConfigSavedEvent>, IHandle<TorrentAddedEvent>, IHandle<TorrentUpdatedEvent>, IHandle<TorrentDeletedEvent>, IHandle<PeerRequestRejectedEvent>, IHandle<TorrentDownloadCompletedEvent>, IHandle<TorrentFinishedEvent>, IHandle<TorrentStatusChangedEvent>
 {
     private const int OutgoingConnectTimeoutMs = 5000;
     private const int UnauthenticatedHandshakeTimeoutMs = 5000;
@@ -61,8 +61,8 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
     private readonly PiecePicker.IPiecePicker _sequentialPicker;
     private readonly PiecePicker.IPiecePicker _rarestFirstPicker;
     private readonly IPieceStorage _pieceStorage;
-    private readonly SemaphoreSlim _connectionSemaphore;
-    private readonly SemaphoreSlim _halfOpenSemaphore;
+    private readonly object _limitLock = new();
+    private readonly List<SemaphoreSlim> _retiredSemaphores = new();
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte> _inFlightOutgoingEndpoints = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Torrent> _torrentCache = new(StringComparer.OrdinalIgnoreCase);
@@ -82,6 +82,11 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
     private readonly ITorrentFileService _torrentFileService;
     private TcpListener _listener;
     private CancellationTokenSource _listenerCts;
+    private SemaphoreSlim _connectionSemaphore;
+    private SemaphoreSlim _halfOpenSemaphore;
+    private int _connectionLimit;
+    private int _halfOpenLimit;
+    private int _disposeOnce;
 
     public Socket ListenerSocket => _listener?.Server;
     public PiecePicker.PiecePicker PiecePicker => _piecePicker;
@@ -406,12 +411,8 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
             _utpManager.OnConnectionAccepted += OnUtpConnectionAccepted;
         }
 
-        var maxGlobal = configService.MaxGlobalConnections > 0 ? configService.MaxGlobalConnections : 200;
-        var maxHalfOpen = configService.MaximumHalfOpenConnections > 0 ? configService.MaximumHalfOpenConnections : 50;
-
-        _connectionSemaphore = new SemaphoreSlim(maxGlobal);
-        _halfOpenSemaphore = new SemaphoreSlim(maxHalfOpen);
         _logger = LogManager.GetCurrentClassLogger();
+        ApplyConnectionLimits();
 
         if (_vpnKillSwitchService != null)
         {
@@ -457,6 +458,11 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
     {
         _logger.Info("VPN interface '{0}' restored. Rebinding peer listener socket.", iface);
         TriggerRebind();
+    }
+
+    public void Handle(ConfigSavedEvent message)
+    {
+        ApplyConnectionLimits();
     }
 
     public void Handle(VpnInterfaceRestoredEvent message)
@@ -1156,6 +1162,11 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
 
     public override void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposeOnce, 1) != 0)
+        {
+            return;
+        }
+
         if (_vpnKillSwitchService != null)
         {
             _vpnKillSwitchService.VpnDropped -= OnVpnDropped;
@@ -1184,10 +1195,100 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
 
         StopListener();
         _connectionsPerIp.Clear();
-        _rebindSignal?.Dispose();
-        _connectionSemaphore?.Dispose();
-        _halfOpenSemaphore?.Dispose();
+        try
+        {
+            _rebindSignal?.Dispose();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        lock (_limitLock)
+        {
+            DisposeSemaphore(_connectionSemaphore);
+            DisposeSemaphore(_halfOpenSemaphore);
+            foreach (var retired in _retiredSemaphores)
+            {
+                DisposeSemaphore(retired);
+            }
+
+            _retiredSemaphores.Clear();
+            _connectionSemaphore = null;
+            _halfOpenSemaphore = null;
+        }
+
         base.Dispose();
+    }
+
+    private void ApplyConnectionLimits()
+    {
+        var maxGlobal = _configService.MaxGlobalConnections > 0 ? _configService.MaxGlobalConnections : 200;
+        var maxHalfOpen = _configService.MaximumHalfOpenConnections > 0 ? _configService.MaximumHalfOpenConnections : 50;
+        lock (_limitLock)
+        {
+            ReplaceSemaphore(ref _connectionSemaphore, ref _connectionLimit, maxGlobal);
+            ReplaceSemaphore(ref _halfOpenSemaphore, ref _halfOpenLimit, maxHalfOpen);
+        }
+    }
+
+    private void ReplaceSemaphore(ref SemaphoreSlim current, ref int currentLimit, int limit)
+    {
+        if (current != null && currentLimit == limit)
+        {
+            return;
+        }
+
+        if (current != null)
+        {
+            _retiredSemaphores.Add(current);
+        }
+
+        current = new SemaphoreSlim(limit);
+        currentLimit = limit;
+    }
+
+    private SemaphoreSlim CurrentConnectionSemaphore()
+    {
+        lock (_limitLock)
+        {
+            return _connectionSemaphore;
+        }
+    }
+
+    private SemaphoreSlim CurrentHalfOpenSemaphore()
+    {
+        lock (_limitLock)
+        {
+            return _halfOpenSemaphore;
+        }
+    }
+
+    private static void ReleaseSemaphore(SemaphoreSlim semaphore)
+    {
+        if (semaphore == null)
+        {
+            return;
+        }
+
+        try
+        {
+            semaphore.Release();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Dispose can run while a handshake worker is still leaving its finally block.
+        }
+    }
+
+    private static void DisposeSemaphore(SemaphoreSlim semaphore)
+    {
+        try
+        {
+            semaphore?.Dispose();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     public void StopListening()
@@ -1654,6 +1755,8 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
         var ipReserved = false;
         var acquiredConnectionSemaphore = false;
         var acquiredHalfOpenSemaphore = false;
+        var halfOpenSemaphore = CurrentHalfOpenSemaphore();
+        var connectionSemaphore = CurrentConnectionSemaphore();
 
         try
         {
@@ -1705,7 +1808,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
 
             try
             {
-                if (!await _halfOpenSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+                if (halfOpenSemaphore == null || !await halfOpenSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
                 {
                     client.Dispose();
                     return;
@@ -1721,7 +1824,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
 
             try
             {
-                if (!await _connectionSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+                if (connectionSemaphore == null || !await connectionSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
                 {
                     client.Dispose();
                     return;
@@ -1742,7 +1845,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
                 {
                     if (acquiredHalfOpenSemaphore)
                     {
-                        _halfOpenSemaphore.Release();
+                        ReleaseSemaphore(halfOpenSemaphore);
                         acquiredHalfOpenSemaphore = false;
                     }
                 }
@@ -1766,12 +1869,12 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
         {
             if (acquiredHalfOpenSemaphore)
             {
-                _halfOpenSemaphore.Release();
+                ReleaseSemaphore(halfOpenSemaphore);
             }
 
             if (acquiredConnectionSemaphore)
             {
-                _connectionSemaphore.Release();
+                ReleaseSemaphore(connectionSemaphore);
             }
 
             if (ipReserved && clientIp != null)
@@ -2098,12 +2201,13 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
         }
 
         var acquiredHalfOpen = false;
+        var halfOpenSemaphore = CurrentHalfOpenSemaphore();
         PeerConnection connection = null;
         try
         {
             try
             {
-                if (!await _halfOpenSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+                if (halfOpenSemaphore == null || !await halfOpenSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
                 {
                     return;
                 }
@@ -2299,7 +2403,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
             {
                 if (acquiredHalfOpen)
                 {
-                    _halfOpenSemaphore.Release();
+                    ReleaseSemaphore(halfOpenSemaphore);
                     acquiredHalfOpen = false;
                 }
             }
@@ -2324,7 +2428,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
         {
             if (acquiredHalfOpen)
             {
-                _halfOpenSemaphore.Release();
+                ReleaseSemaphore(halfOpenSemaphore);
             }
 
             DecrementConnectionCount(candidate.Ip);
@@ -2436,6 +2540,8 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
         var ipReserved = false;
         var acquiredConnectionSemaphore = false;
         var acquiredHalfOpenSemaphore = false;
+        var halfOpenSemaphore = CurrentHalfOpenSemaphore();
+        var connectionSemaphore = CurrentConnectionSemaphore();
 
         try
         {
@@ -2489,7 +2595,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
 
             try
             {
-                if (!await _halfOpenSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+                if (halfOpenSemaphore == null || !await halfOpenSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
                 {
                     _logger.Debug("Half-open connection quota exceeded; rejecting incoming uTP peer {0}", clientIp);
                     conn.Dispose();
@@ -2506,7 +2612,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
 
             try
             {
-                if (!await _connectionSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+                if (connectionSemaphore == null || !await connectionSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
                 {
                     _logger.Debug("Global connection quota exceeded; rejecting incoming uTP peer {0}", clientIp);
                     conn.Dispose();
@@ -2528,7 +2634,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
                 {
                     if (acquiredHalfOpenSemaphore)
                     {
-                        _halfOpenSemaphore.Release();
+                        ReleaseSemaphore(halfOpenSemaphore);
                         acquiredHalfOpenSemaphore = false;
                     }
                 }
@@ -2557,12 +2663,12 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
         {
             if (acquiredHalfOpenSemaphore)
             {
-                _halfOpenSemaphore.Release();
+                ReleaseSemaphore(halfOpenSemaphore);
             }
 
             if (acquiredConnectionSemaphore)
             {
-                _connectionSemaphore.Release();
+                ReleaseSemaphore(connectionSemaphore);
             }
 
             if (ipReserved && clientIp != null)
