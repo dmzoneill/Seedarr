@@ -1,7 +1,12 @@
 using System;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using DryIoc;
+using DryIoc.Microsoft.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
 using NzbDrone.Common.Composition;
 
@@ -212,5 +217,122 @@ public class ContainerExtensionsTest
 
         Assert.That(ex.Message, Does.Contain(nameof(ConflictingLifetimeService)));
         Assert.That(ex.Message, Does.Contain("multiple lifetime attributes"));
+    }
+
+    [Test]
+    public void AutoAddServices_registers_every_implementation_and_keeps_that_instance_on_rescan()
+    {
+        var container = new Container(rules => rules.WithNzbDroneRules());
+        var types = new[] { typeof(MultiA), typeof(MultiB), typeof(MultiC) };
+
+        container.AutoAddServices(types);
+        var first = container.Resolve<IEnumerable<IMultiContract>>().ToList();
+        Assert.That(first.Select(service => service.GetType()), Is.EquivalentTo(types));
+
+        var firstA = first.OfType<MultiA>().Single();
+        container.AutoAddServices(types);
+        var second = container.Resolve<IEnumerable<IMultiContract>>().ToList();
+
+        Assert.That(second, Has.Count.EqualTo(types.Length));
+        Assert.That(second.Select(service => service.GetType()), Is.EquivalentTo(types));
+        Assert.That(second.OfType<MultiA>().Single(), Is.SameAs(firstA));
+    }
+
+    [Test]
+    public void optional_delegates_and_framework_types_keep_their_declared_defaults()
+    {
+        var container = new Container(rules => rules.WithNzbDroneRules());
+        container.AutoAddServices(new[] { typeof(ProbeDependency) });
+
+        var service = container.Resolve<OptionalSeamService>();
+        Assert.That(service.Dependency, Is.InstanceOf<ProbeDependency>());
+        Assert.That(service.Probe, Is.Null);
+        Assert.That(service.Address, Is.Null);
+
+        var twoCtor = container.Resolve<TwoCtorService>();
+        Assert.That(twoCtor.UsedHttpClient, Is.False);
+
+        Assert.Throws<ContainerException>(() => container.Resolve<RequiredAddressService>());
+    }
+
+    [Test]
+    public void microsoft_dependency_injection_adapter_keeps_optional_delegate_defaults()
+    {
+        var container = new Container(rules => rules.WithNzbDroneRules());
+        container.AutoAddServices(new[] { typeof(ProbeDependency) });
+
+        var factory = new DryIocServiceProviderFactory(container);
+        using var adapted = factory.CreateBuilder(new ServiceCollection());
+
+        var service = adapted.Resolve<OptionalSeamService>();
+        Assert.That(service.Dependency, Is.InstanceOf<ProbeDependency>());
+        Assert.That(service.Probe, Is.Null);
+    }
+
+    public interface IMultiContract
+    {
+    }
+
+    public class MultiA : IMultiContract
+    {
+    }
+
+    public class MultiB : IMultiContract
+    {
+    }
+
+    public class MultiC : IMultiContract
+    {
+    }
+
+    public interface IProbeDependency
+    {
+    }
+
+    public class ProbeDependency : IProbeDependency
+    {
+    }
+
+    public class OptionalSeamService
+    {
+        public OptionalSeamService(
+            IProbeDependency dependency = null,
+            Func<CancellationToken, Task<string>> probe = null,
+            IPAddress address = null)
+        {
+            Dependency = dependency;
+            Probe = probe;
+            Address = address;
+        }
+
+        public IProbeDependency Dependency { get; }
+
+        public Func<CancellationToken, Task<string>> Probe { get; }
+
+        public IPAddress Address { get; }
+    }
+
+    public class RequiredAddressService
+    {
+        public RequiredAddressService(IPAddress address)
+        {
+            Address = address;
+        }
+
+        public IPAddress Address { get; }
+    }
+
+    public class TwoCtorService
+    {
+        public TwoCtorService()
+        {
+        }
+
+        public TwoCtorService(HttpClient client)
+        {
+            UsedHttpClient = client != null;
+        }
+
+        public bool UsedHttpClient { get; }
     }
 }
