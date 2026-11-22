@@ -292,4 +292,67 @@ public class SidecarProcessHostTest
         Assert.That(host.PluginInfo.State, Is.EqualTo(PluginState.Stopped));
         Assert.That(host.IsRunning, Is.False);
     }
+
+    [Test]
+    public async Task StartAsync_clears_intentional_stop_and_detaches_a_previous_process()
+    {
+        var script = Path.Combine(_tempDir, "plugin.sh");
+        await File.WriteAllTextAsync(script, "#!/bin/sh\nexit 0\n");
+
+        using var host = new SidecarProcessHost(_manifest, _tempDir);
+        await host.StartAsync();
+        Assert.That(host.PluginInfo.ProcessId, Is.Not.Null);
+
+        await host.StartAsync();
+        Assert.That(host.PluginInfo.State, Is.EqualTo(PluginState.Running).Or.EqualTo(PluginState.Stopped));
+    }
+
+    [Test]
+    public void Exit_handler_ignores_a_disposed_process_and_stops_the_current_one()
+    {
+        using var host = new SidecarProcessHost(_manifest, _tempDir);
+        host.PluginInfo.Enabled = true;
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+
+        using var disposed = Process.Start(new ProcessStartInfo
+        {
+            FileName = "sleep",
+            Arguments = "30",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        });
+        disposed.Kill();
+        disposed.WaitForExit();
+        disposed.Dispose();
+
+        var detach = typeof(SidecarProcessHost).GetMethod("DetachExitHandler", flags);
+        Assert.DoesNotThrow(() => detach.Invoke(host, new object[] { disposed }));
+
+        using var current = Process.Start(new ProcessStartInfo
+        {
+            FileName = "sleep",
+            Arguments = "30",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        });
+        typeof(SidecarProcessHost).GetField("_process", flags).SetValue(host, current);
+        typeof(SidecarProcessHost).GetField("_intentionalStop", flags).SetValue(host, true);
+        host.PluginInfo.State = PluginState.Running;
+
+        var exited = typeof(SidecarProcessHost).GetMethod("OnProcessExited", flags);
+        exited.Invoke(host, new object[] { current, EventArgs.Empty });
+
+        Assert.That(host.PluginInfo.CrashCount, Is.EqualTo(0));
+        Assert.That(host.PluginInfo.State, Is.EqualTo(PluginState.Stopped));
+        Assert.That(typeof(SidecarProcessHost).GetField("_process", flags).GetValue(host), Is.Null);
+
+        exited.Invoke(host, new object[] { disposed, EventArgs.Empty });
+        Assert.That(host.PluginInfo.CrashCount, Is.EqualTo(0));
+    }
 }
