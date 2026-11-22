@@ -285,11 +285,6 @@ public class TorrentService : ITorrentService,
             PopulatePieceHashes(torrent);
         }
 
-        if (torrent.Id > 0)
-        {
-            PreserveMonotonicCounters(torrent, _repository.Get(torrent.Id));
-        }
-
         _logger.Debug("Updating torrent: {0}", torrent.Name);
         var updated = _repository.Update(torrent);
         PopulatePieceHashes(updated);
@@ -304,16 +299,6 @@ public class TorrentService : ITorrentService,
         if (list == null || list.Count == 0)
         {
             return;
-        }
-
-        foreach (var torrent in list)
-        {
-            if (torrent == null || torrent.Id <= 0)
-            {
-                continue;
-            }
-
-            PreserveMonotonicCounters(torrent, _repository.Get(torrent.Id));
         }
 
         _logger.Debug("Batch updating {0} torrents", list.Count);
@@ -1216,27 +1201,6 @@ public class TorrentService : ITorrentService,
 
         _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
         _eventAggregator.PublishEvent(new TorrentUpdatedEvent(torrent));
-    }
-
-    private static void PreserveMonotonicCounters(Torrent incoming, Torrent current)
-    {
-        if (incoming == null || current == null)
-        {
-            return;
-        }
-
-        var uploaded = Math.Max(incoming.Uploaded, current.Uploaded);
-        var downloaded = Math.Max(incoming.Downloaded, current.Downloaded);
-        var changed = uploaded != incoming.Uploaded || downloaded != incoming.Downloaded;
-        incoming.Uploaded = uploaded;
-        incoming.Downloaded = downloaded;
-        incoming.SeedingTime = Math.Max(incoming.SeedingTime, current.SeedingTime);
-        incoming.SessionUploaded = Math.Max(incoming.SessionUploaded, current.SessionUploaded);
-        incoming.SessionDownloaded = Math.Max(incoming.SessionDownloaded, current.SessionDownloaded);
-        if (changed)
-        {
-            incoming.UpdateRatio();
-        }
     }
 
     private static TorrentExecutionWrite ToExecutionWrite(Torrent torrent, bool setIsVpnPaused = false)

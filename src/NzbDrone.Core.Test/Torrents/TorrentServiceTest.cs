@@ -1866,18 +1866,59 @@ namespace NzbDrone.Core.Test.Torrents
         }
 
         [Test]
-        public void Update_keeps_higher_counters_and_recomputes_ratio()
+        public void Update_persists_lower_downloaded_from_fast_resume_and_client_reconcile()
         {
-            var current = new Torrent { Id = 8, Name = "Counters", Uploaded = 5000, Downloaded = 1000, Ratio = 5 };
-            var incoming = new Torrent { Id = 8, Name = "Counters", Uploaded = 100, Downloaded = 200, Ratio = 0.5 };
-            _repository.Get(8).Returns(current);
+            var stored = new Torrent
+            {
+                Id = 8,
+                Name = "Verified",
+                Uploaded = 5000,
+                Downloaded = 4000,
+                TotalSize = 4000,
+                PieceLength = 1000,
+                Status = TorrentStatus.Seeding
+            };
+            var verifiedPieces = new[] { true, false, false, false };
+            var verifiedBytes = TorrentPieceCalculator.SumVerifiedBytes(verifiedPieces, stored.TotalSize, stored.PieceLength);
+            Assert.That(verifiedBytes, Is.LessThan(stored.Downloaded));
+
+            var fastResume = new Torrent
+            {
+                Id = stored.Id,
+                Name = stored.Name,
+                Uploaded = stored.Uploaded,
+                Downloaded = verifiedBytes,
+                TotalSize = stored.TotalSize,
+                PieceLength = stored.PieceLength,
+                Progress = 0.25,
+                Status = TorrentStatus.Downloading
+            };
+            _repository.Get(stored.Id).Returns(stored);
             _repository.Update(Arg.Any<Torrent>()).Returns(call => call.Arg<Torrent>());
 
-            var result = _subject.Update(incoming);
+            var resumed = _subject.Update(fastResume);
 
-            Assert.That(result.Uploaded, Is.EqualTo(5000));
-            Assert.That(result.Downloaded, Is.EqualTo(1000));
-            Assert.That(result.Ratio, Is.EqualTo(5));
+            Assert.That(resumed.Downloaded, Is.EqualTo(verifiedBytes));
+            _repository.Received(1).Update(Arg.Is<Torrent>(t => t.Id == stored.Id && t.Downloaded == verifiedBytes));
+
+            var reconciledDownloaded = Math.Max(0L, 10000L - 7000L);
+            var reconcile = new Torrent
+            {
+                Id = 9,
+                Name = "Client",
+                Uploaded = 100,
+                Downloaded = reconciledDownloaded,
+                TotalSize = 10000,
+                Progress = 0.3,
+                Status = TorrentStatus.Downloading
+            };
+            _repository.Get(9).Returns(new Torrent { Id = 9, Name = "Client", Downloaded = 9000, TotalSize = 10000, Uploaded = 100 });
+            _repository.UpdateMany(Arg.Any<IEnumerable<Torrent>>());
+
+            _subject.UpdateMany(new[] { reconcile });
+
+            Assert.That(reconcile.Downloaded, Is.EqualTo(3000));
+            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items => items.Single().Id == 9 && items.Single().Downloaded == 3000));
         }
     }
 }
