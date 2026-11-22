@@ -103,6 +103,21 @@ import type {
 
 const DEFAULT_REFETCH_MS = 5000;
 
+/**
+ * Torrent list and detail queries poll on uiRefreshRateSec.
+ * staleTime matches that interval so window focus and remounts do not add
+ * another full GET /torrent while TorrentUpdated is patched into the cache.
+ */
+export function torrentListCacheTiming(refetchIntervalMs: number): {
+  refetchInterval: number;
+  staleTime: number;
+} {
+  return {
+    refetchInterval: refetchIntervalMs,
+    staleTime: refetchIntervalMs,
+  };
+}
+
 export function useRefetchInterval(): number {
   const { data } = useQuery<{ uiRefreshRateSec: number }>({
     queryKey: ["config", "advanced"],
@@ -142,7 +157,7 @@ export function useTorrents() {
   return useQuery<Torrent[]>({
     queryKey: ["torrents"],
     queryFn: () => apiClient.get("/torrent"),
-    refetchInterval: interval,
+    ...torrentListCacheTiming(interval),
   });
 }
 
@@ -152,7 +167,7 @@ export function useTorrent(id: number) {
     queryKey: ["torrents", id],
     queryFn: () => apiClient.get(`/torrent/${id}`),
     enabled: id > 0,
-    refetchInterval: interval,
+    ...torrentListCacheTiming(interval),
   });
 }
 

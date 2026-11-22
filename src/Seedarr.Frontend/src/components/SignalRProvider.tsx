@@ -27,6 +27,11 @@ import {
   resolvePieceMapTorrentId,
   type PieceMapWirePayload,
 } from "../utils/pieceMapSignalR";
+import {
+  enqueueTorrentUpdatedPatch,
+  isTorrentUpdatedEvent,
+  torrentPatchFromSignalRPayload,
+} from "../utils/torrentSignalRCache";
 
 export {
   subscribeToTorrent,
@@ -75,9 +80,12 @@ export const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
   TorrentAdded: [["torrents"], ["trackerboost"]],
   torrent_added: [["torrents"], ["trackerboost"]],
   torrentAdded: [["torrents"], ["trackerboost"]],
-  TorrentUpdated: [["torrents"], ["trackerboost"]],
-  torrent_updated: [["torrents"], ["trackerboost"]],
-  torrentUpdated: [["torrents"], ["trackerboost"]],
+  // Progress ticks publish TorrentUpdated for every active torrent. The named
+  // handler patches ["torrents"] / ["torrents", id] instead of refetching.
+  // An empty key list keeps the listener registered without a REST stampede.
+  TorrentUpdated: [],
+  torrent_updated: [],
+  torrentUpdated: [],
   TorrentDeleted: [["torrents"], ["trackerboost"]],
   torrent_deleted: [["torrents"], ["trackerboost"]],
   torrentDeleted: [["torrents"], ["trackerboost"]],
@@ -297,7 +305,8 @@ export default function SignalRProvider({
         void queryClient.invalidateQueries({ queryKey: ["tags"] });
       } else if (name.includes("seeding")) {
         void queryClient.invalidateQueries({ queryKey: ["seeding", "stats"] });
-        // Do NOT invalidate ["torrents"] on 1-second ticks; torrents are invalidated on TorrentUpdated
+        // Do NOT invalidate ["torrents"] on 1-second ticks. TorrentUpdated
+        // patches the list cache in place.
       } else if (name.includes("schedule") || name.includes("speedschedule")) {
         void queryClient.invalidateQueries({ queryKey: ["speedschedule"] });
         void queryClient.invalidateQueries({
@@ -313,6 +322,15 @@ export default function SignalRProvider({
 
     for (const [event, queryKeys] of Object.entries(EVENT_INVALIDATION_MAP)) {
       const handler = (data?: unknown) => {
+        if (isTorrentUpdatedEvent(event)) {
+          const patch = torrentPatchFromSignalRPayload(data);
+          if (patch) {
+            enqueueTorrentUpdatedPatch(queryClient, patch);
+            useTorrentStore.getState().updateTelemetry([patch]);
+          }
+          return;
+        }
+
         for (const key of queryKeys) {
           void queryClient.invalidateQueries({ queryKey: key });
         }
