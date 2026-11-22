@@ -29,7 +29,11 @@ interface HistoryState {
 }
 
 function Activity() {
-  const { data: torrents } = useTorrents();
+  const {
+    data: torrents,
+    isLoading: torrentsLoading,
+    isError: torrentsError,
+  } = useTorrents();
   const { data: stats } = useSeedingStats();
   const { data: serverHistory, refetch: refetchHistory } = useSpeedHistory();
 
@@ -206,6 +210,7 @@ function Activity() {
   const currentActive = stats?.activeTorrents ?? 0;
   const currentRatio = stats?.averageRatio ?? 0;
   const currentNetwork = currentUpload + currentDownload;
+  const peersUnavailable = Boolean(torrentsError && !torrents);
 
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
@@ -259,6 +264,12 @@ function Activity() {
         </div>
       </div>
 
+      {!torrentsLoading && torrentsError && (
+        <p className="error" role="alert">
+          Failed to load torrents.
+        </p>
+      )}
+
       <div className="monitoring-grid">
         <LineChart
           title="Upload Speed"
@@ -283,7 +294,7 @@ function Activity() {
         />
         <LineChart
           title="Peer Connections"
-          value={String(currentPeers)}
+          value={peersUnavailable ? "—" : String(currentPeers)}
           data={history.peerConnections}
           color="#d4843a"
           maxPoints={MAX_POINTS}

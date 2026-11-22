@@ -60,7 +60,7 @@ function TorrentGrid({
 }: TorrentGridProps) {
   const { t } = useTranslation();
   const { canMutateTorrents, canDeleteTorrent } = usePermissions();
-  const { data: fetchedTorrents, isLoading } = useTorrents();
+  const { data: fetchedTorrents, isLoading, isError } = useTorrents();
   const torrents = propTorrents ?? fetchedTorrents;
   const { data: arrConnections } = useArrConnections();
   const startSeeding = useStartSeeding();
@@ -146,6 +146,10 @@ function TorrentGrid({
         ))}
       </div>
     );
+  }
+
+  if (isError) {
+    return <p className="error">Failed to load data.</p>;
   }
 
   const filtered = propTorrents
