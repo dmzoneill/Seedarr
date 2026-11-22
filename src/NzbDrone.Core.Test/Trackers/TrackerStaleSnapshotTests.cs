@@ -226,4 +226,74 @@ public class TrackerStaleSnapshotTests
         Assert.That(saved.Seeders, Is.EqualTo(6));
         Assert.That(saved.Leechers, Is.EqualTo(2));
     }
+
+    [Test]
+    public async Task AnnounceTracker_skips_when_the_row_was_paused_after_the_caller_loaded_it()
+    {
+        _store.Seed(new Torrent
+        {
+            Id = 11,
+            Name = "TrackerSkip",
+            InfoHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            Status = TorrentStatus.Seeding,
+            Uploaded = 10,
+            TotalSize = 100
+        });
+        var stale = _store.Get(11);
+        _store.Mutate(11, row =>
+        {
+            row.Status = TorrentStatus.Paused;
+            row.Active = false;
+        });
+
+        var result = await _announce.AnnounceTrackerAsync(
+            stale,
+            new TrackerEntry { Id = 1, TorrentId = 11, Url = "http://tracker.example/announce", Enabled = true },
+            force: true);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Does.Contain("no longer active"));
+        await _multiTracker.DidNotReceive().AnnounceAsync(
+            Arg.Any<TrackerAnnounceRequest>(),
+            Arg.Any<List<List<string>>>(),
+            Arg.Any<bool>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Announce_of_an_unsaved_torrent_does_not_persist_swarm_or_pause_state()
+    {
+        var torrent = new Torrent
+        {
+            Id = 0,
+            Name = "Unsaved",
+            InfoHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            Status = TorrentStatus.Seeding,
+            Uploaded = 1,
+            TotalSize = 10
+        };
+        _trackerEntryService.GetByTorrentId(0).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 1, TorrentId = 0, Url = "http://tracker.example/announce", Enabled = true }
+        });
+        _multiTracker.AnnounceAsync(
+                Arg.Any<TrackerAnnounceRequest>(),
+                Arg.Any<List<List<string>>>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new TrackerAnnounceResponse
+            {
+                Success = true,
+                Complete = 2,
+                Incomplete = 1,
+                Interval = 1800,
+                WarningMessage = "account flagged"
+            }));
+
+        var results = await _announce.AnnounceTorrentAsync(torrent, force: true);
+
+        Assert.That(results, Is.Not.Empty);
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
+        Assert.That(_store.FullRowWrites, Is.EqualTo(0));
+    }
 }

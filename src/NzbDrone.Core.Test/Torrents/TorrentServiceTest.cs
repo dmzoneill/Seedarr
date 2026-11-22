@@ -1803,5 +1803,81 @@ namespace NzbDrone.Core.Test.Torrents
 
             diskAllocationService.Received(1).PreallocateFiles(torrent, files);
         }
+
+        [Test]
+        public void Narrow_service_writes_delegate_to_the_repository()
+        {
+            var runtime = new[] { new TorrentRuntimeWrite { Id = 1, ExpectedStatus = (int)TorrentStatus.Seeding, Uploaded = 5 } };
+            var transitions = new[] { new TorrentStatusTransition { Id = 1, ExpectedStatus = (int)TorrentStatus.Seeding, Status = (int)TorrentStatus.Paused } };
+            var execution = new[] { new TorrentExecutionWrite { Id = 1, Status = (int)TorrentStatus.Paused } };
+            _repository.UpdateRuntimeStats(runtime).Returns(1);
+            _repository.TryTransitionStatuses(transitions).Returns(1);
+
+            Assert.That(_subject.UpdateRuntimeStats(runtime), Is.EqualTo(1));
+            Assert.That(_subject.TryTransitionStatuses(transitions), Is.EqualTo(1));
+            _subject.ClearActivity(new[] { 1 });
+            _subject.UpdateExecutionStates(execution);
+            _subject.UpdateExecutionStates(null);
+            _subject.UpdateExecutionStates(Array.Empty<TorrentExecutionWrite>());
+            _subject.UpdateSuperSeeding(1, false);
+            _subject.UpdateMany(null);
+
+            _repository.Received(1).UpdateRuntimeStats(runtime);
+            _repository.Received(1).TryTransitionStatuses(transitions);
+            _repository.Received(1).ClearActivity(Arg.Is<IEnumerable<int>>(ids => ids.Contains(1)));
+            _repository.Received(1).UpdateExecutionStates(execution);
+            _repository.Received(1).UpdateSuperSeeding(1, false);
+            _repository.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<Torrent>>());
+        }
+
+        [Test]
+        public void UpdateSwarmStats_publishes_the_current_row()
+        {
+            var torrent = new Torrent { Id = 6, Name = "Swarm", Seeders = 4, Leechers = 2 };
+            _repository.Get(6).Returns(torrent);
+
+            _subject.UpdateSwarmStats(6, 4, 2, null);
+
+            _repository.Received(1).UpdateSwarmStats(6, 4, 2, null);
+            _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == torrent));
+        }
+
+        [Test]
+        public void UpdateUserFields_persists_a_status_change_without_rewriting_counters()
+        {
+            var existing = new Torrent
+            {
+                Id = 7,
+                Name = "Live",
+                Status = TorrentStatus.Seeding,
+                Uploaded = 80,
+                Downloaded = 40,
+                Active = true
+            };
+            _repository.Get(7).Returns(existing);
+
+            var result = _subject.UpdateUserFields(7, new Torrent { Name = "Live", Status = TorrentStatus.Paused });
+
+            Assert.That(result.Status, Is.EqualTo(TorrentStatus.Paused));
+            Assert.That(result.Uploaded, Is.EqualTo(80));
+            _repository.Received(1).UpdateUserColumns(existing);
+            _repository.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+                writes.Single().Id == 7 && writes.Single().Status == (int)TorrentStatus.Paused));
+        }
+
+        [Test]
+        public void Update_keeps_higher_counters_and_recomputes_ratio()
+        {
+            var current = new Torrent { Id = 8, Name = "Counters", Uploaded = 5000, Downloaded = 1000, Ratio = 5 };
+            var incoming = new Torrent { Id = 8, Name = "Counters", Uploaded = 100, Downloaded = 200, Ratio = 0.5 };
+            _repository.Get(8).Returns(current);
+            _repository.Update(Arg.Any<Torrent>()).Returns(call => call.Arg<Torrent>());
+
+            var result = _subject.Update(incoming);
+
+            Assert.That(result.Uploaded, Is.EqualTo(5000));
+            Assert.That(result.Downloaded, Is.EqualTo(1000));
+            Assert.That(result.Ratio, Is.EqualTo(5));
+        }
     }
 }

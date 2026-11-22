@@ -233,6 +233,111 @@ CREATE TABLE ""Torrents"" (
         }
     }
 
+    [Test]
+    public void Narrow_writes_cover_empty_inputs_transitions_sort_and_super_seeding()
+    {
+        Assert.That(_repository.UpdateRuntimeStats(null), Is.EqualTo(0));
+        Assert.That(_repository.UpdateRuntimeStats(Array.Empty<TorrentRuntimeWrite>()), Is.EqualTo(0));
+        Assert.That(_repository.TryTransitionStatuses(null), Is.EqualTo(0));
+        Assert.That(_repository.TryTransitionStatuses(Array.Empty<TorrentStatusTransition>()), Is.EqualTo(0));
+
+        _repository.ClearActivity(null);
+        _repository.ClearActivity(new[] { 0, -1 });
+        _repository.UpdateSwarmStats(0, 1, 1, 1);
+        _repository.UpdateExecutionStates(null);
+        _repository.UpdateExecutionStates(Array.Empty<TorrentExecutionWrite>());
+        _repository.UpdateSuperSeeding(0, true);
+        _repository.UpdateSortOrders(null);
+        _repository.UpdateSortOrders(new Torrent[] { null, new Torrent { Id = 0, SortOrder = 4 } });
+        _repository.UpdateUserColumns(null);
+        _repository.UpdateUserColumns(new Torrent { Id = 0 });
+
+        Insert(8, TorrentStatus.Seeding, uploaded: 10, label: "row", category: "cat", priority: 1);
+
+        var transitioned = _repository.TryTransitionStatuses(new[]
+        {
+            new TorrentStatusTransition
+            {
+                Id = 8,
+                ExpectedStatus = (int)TorrentStatus.Seeding,
+                Status = (int)TorrentStatus.Paused,
+                Active = false,
+                UploadSpeed = 0,
+                DownloadSpeed = 0,
+                LastActive = DateTime.UtcNow
+            }
+        });
+        Assert.That(transitioned, Is.EqualTo(1));
+        Assert.That(_repository.TryTransitionStatuses(new[]
+        {
+            new TorrentStatusTransition
+            {
+                Id = 8,
+                ExpectedStatus = (int)TorrentStatus.Seeding,
+                Status = (int)TorrentStatus.Downloading,
+                Active = true
+            }
+        }), Is.EqualTo(0));
+
+        _repository.ClearActivity(new[] { 8, 8, 0 });
+        _repository.UpdateSuperSeeding(8, true);
+        _repository.UpdateSortOrders(new[] { new Torrent { Id = 8, SortOrder = 12 } });
+
+        var row = Read(8);
+        Assert.That(row.Status, Is.EqualTo((int)TorrentStatus.Paused));
+        Assert.That(row.Uploaded, Is.EqualTo(10));
+        Assert.That(row.Label, Is.EqualTo("row"));
+        Assert.That(row.Category, Is.EqualTo("cat"));
+        Assert.That(row.Priority, Is.EqualTo(1));
+
+        using var connection = _database.OpenConnection();
+        var superSeeding = connection.ExecuteScalar<long>(@"SELECT ""SuperSeeding"" FROM ""Torrents"" WHERE ""Id"" = 8");
+        var sortOrder = connection.ExecuteScalar<long>(@"SELECT ""SortOrder"" FROM ""Torrents"" WHERE ""Id"" = 8");
+        var active = connection.ExecuteScalar<long>(@"SELECT ""Active"" FROM ""Torrents"" WHERE ""Id"" = 8");
+        Assert.That(superSeeding, Is.EqualTo(1));
+        Assert.That(sortOrder, Is.EqualTo(12));
+        Assert.That(active, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Failed_batch_rolls_the_transaction_back_and_rethrows()
+    {
+        using (var connection = _database.OpenConnection())
+        {
+            connection.Execute(@"DROP TABLE ""Torrents""");
+        }
+
+        Assert.Throws<SqliteException>(() =>
+            _repository.UpdateRuntimeStats(new[] { Runtime(1, TorrentStatus.Seeding, 1, 1) }));
+    }
+
+    [Test]
+    public void Write_structs_compare_by_value()
+    {
+        var clear = new TorrentRepository.ActivityClear(4);
+        var sameClear = new TorrentRepository.ActivityClear(4);
+        var otherClear = new TorrentRepository.ActivityClear(5);
+        Assert.That(clear.Equals(sameClear), Is.True);
+        Assert.That(clear.Equals((object)sameClear), Is.True);
+        Assert.That(clear.Equals((object)"no"), Is.False);
+        Assert.That(clear == sameClear, Is.True);
+        Assert.That(clear != otherClear, Is.True);
+        Assert.That(clear.GetHashCode(), Is.EqualTo(sameClear.GetHashCode()));
+        Assert.That(clear.Id, Is.EqualTo(4));
+        Assert.That(clear.Active, Is.False);
+
+        var sort = new TorrentRepository.SortWrite(4, 9);
+        var sameSort = new TorrentRepository.SortWrite(4, 9);
+        var otherSort = new TorrentRepository.SortWrite(4, 2);
+        Assert.That(sort.Equals(sameSort), Is.True);
+        Assert.That(sort.Equals((object)sameSort), Is.True);
+        Assert.That(sort.Equals((object)null), Is.False);
+        Assert.That(sort == sameSort, Is.True);
+        Assert.That(sort != otherSort, Is.True);
+        Assert.That(sort.GetHashCode(), Is.EqualTo(sameSort.GetHashCode()));
+        Assert.That(sort.SortOrder, Is.EqualTo(9));
+    }
+
     private static TorrentRuntimeWrite Runtime(int id, TorrentStatus expected, long uploaded, int seeders)
     {
         return new TorrentRuntimeWrite

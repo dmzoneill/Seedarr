@@ -528,7 +528,7 @@ WHERE ""Id"" = @Id";
         };
     }
 
-    private readonly struct ActivityClear : IEquatable<ActivityClear>
+    internal readonly struct ActivityClear : IEquatable<ActivityClear>
     {
         public ActivityClear(int id)
         {
@@ -566,7 +566,7 @@ WHERE ""Id"" = @Id";
         }
     }
 
-    private readonly struct SortWrite : IEquatable<SortWrite>
+    internal readonly struct SortWrite : IEquatable<SortWrite>
     {
         public SortWrite(int id, int sortOrder)
         {
