@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -1913,5 +1914,129 @@ public class TrackerAnnounceServiceTest
         _multiTracker.Received().Announce(
             Arg.Is<TrackerAnnounceRequest>(request => request.Event == AnnounceEvent.Started),
             Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public async Task Concurrent_announces_for_the_same_torrent_hit_the_tracker_once()
+    {
+        var torrent = new Torrent
+        {
+            Id = 9,
+            Name = "Race",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Uploaded = 1,
+            Downloaded = 10,
+            TotalSize = 10,
+            Status = TorrentStatus.Seeding
+        };
+        var stored = new TrackerEntry
+        {
+            Id = 1,
+            TorrentId = 9,
+            Url = "http://tracker.example/announce",
+            Enabled = true
+        };
+        _trackerEntryService.GetByTorrentId(9).Returns(_ => new List<TrackerEntry>
+        {
+            new()
+            {
+                Id = stored.Id,
+                TorrentId = stored.TorrentId,
+                Url = stored.Url,
+                Enabled = stored.Enabled,
+                TotalAnnounces = stored.TotalAnnounces,
+                SuccessfulAnnounces = stored.SuccessfulAnnounces,
+                LastAnnounce = stored.LastAnnounce
+            }
+        });
+        _trackerEntryService.Update(Arg.Any<TrackerEntry>()).Returns(call =>
+        {
+            var updated = call.Arg<TrackerEntry>();
+            lock (stored)
+            {
+                stored.TotalAnnounces = updated.TotalAnnounces;
+                stored.SuccessfulAnnounces = updated.SuccessfulAnnounces;
+                stored.LastAnnounce = updated.LastAnnounce;
+            }
+
+            return updated;
+        });
+
+        var calls = 0;
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _multiTracker.AnnounceAsync(
+                Arg.Any<TrackerAnnounceRequest>(),
+                Arg.Any<List<List<string>>>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                Interlocked.Increment(ref calls);
+                started.TrySetResult();
+                return release.Task.ContinueWith(
+                    _ => new TrackerAnnounceResponse
+                    {
+                        Success = true,
+                        Complete = 1,
+                        Incomplete = 0,
+                        Interval = 1800,
+                        MinInterval = 60
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            });
+
+        var first = _service.AnnounceTorrentAsync(torrent, force: true);
+        var entered = await Task.WhenAny(started.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.That(entered, Is.SameAs(started.Task));
+
+        var second = _service.AnnounceTorrentAsync(torrent);
+        var third = _service.AnnounceTorrentAsync(torrent, force: true);
+        await Task.Delay(150);
+
+        Assert.That(Volatile.Read(ref calls), Is.EqualTo(1));
+        release.TrySetResult();
+        await Task.WhenAll(first, second, third);
+
+        Assert.That(Volatile.Read(ref calls), Is.EqualTo(1));
+        Assert.That(stored.SuccessfulAnnounces, Is.EqualTo(1));
+        Assert.That(stored.TotalAnnounces, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void PromoteTracker_replaces_the_tier_list_instead_of_mutating_it()
+    {
+        var torrent = new Torrent
+        {
+            Id = 4,
+            Name = "Tiers",
+            InfoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            Status = TorrentStatus.Seeding,
+            TotalSize = 100,
+            Downloaded = 100
+        };
+        var first = new TrackerEntry { Id = 1, TorrentId = 4, Url = "http://127.0.0.1/a", Tier = 0, Enabled = true };
+        var second = new TrackerEntry { Id = 2, TorrentId = 4, Url = "http://127.0.0.1/b", Tier = 0, Enabled = true };
+        _trackerEntryService.GetByTorrentId(4).Returns(new List<TrackerEntry> { first, second });
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true, Complete = 1, Incomplete = 0, Interval = 1800, MinInterval = 60 });
+
+        _service.AnnounceTorrent(torrent, force: true);
+
+        var map = (ConcurrentDictionary<int, List<List<string>>>)typeof(TrackerAnnounceService)
+            .GetField("_torrentTierOrder", BindingFlags.NonPublic | BindingFlags.Instance)
+            .GetValue(_service);
+        var shared = map[4][0];
+        var before = shared.ToList();
+        var trailing = before[1];
+
+        typeof(TrackerAnnounceService)
+            .GetMethod("PromoteTrackerInTorrentTierOrder", BindingFlags.NonPublic | BindingFlags.Instance)
+            .Invoke(_service, new object[] { 4, 0, trailing });
+
+        Assert.That(shared, Is.EqualTo(before), "Tier promotion must not mutate a list other announces are reading");
+        Assert.That(map[4][0][0], Is.EqualTo(trailing));
     }
 }
