@@ -14,9 +14,16 @@ export function MatrixView({
   onInspectTorrent,
 }: MatrixViewProps) {
   const { t } = useTranslation();
-  const { data: matrixData, isLoading: matrixLoading } =
-    useTrackerBoostMatrix();
-  const { data: torrents } = useTorrents();
+  const {
+    data: matrixData,
+    isLoading: matrixLoading,
+    isError: matrixError,
+  } = useTrackerBoostMatrix();
+  const {
+    data: torrents,
+    isLoading: torrentsLoading,
+    isError: torrentsError,
+  } = useTorrents();
 
   const [matrixViewMode, setMatrixViewMode] = useState<
     "by_torrent" | "by_tracker"
@@ -165,6 +172,12 @@ export function MatrixView({
         </div>
       </div>
 
+      {!torrentsLoading && torrentsError && (
+        <p className="error" role="alert">
+          Failed to load torrents.
+        </p>
+      )}
+
       {matrixLoading ? (
         <div
           style={{
@@ -178,6 +191,10 @@ export function MatrixView({
             "Building swarm cross-matrix...",
           )}
         </div>
+      ) : matrixError ? (
+        <p className="error" role="alert">
+          Failed to load data.
+        </p>
       ) : matrixViewMode === "by_torrent" ? (
         matrixLayoutMode === "grid" ? (
           /* TORRENTS GRID VIEW (POSTER CARDS) */

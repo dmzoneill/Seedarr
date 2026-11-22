@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "../i18n";
 import {
   useTorrents,
@@ -26,6 +27,40 @@ import AddTorrentModal from "./AddTorrentModal";
 import DeleteTorrentModal from "./DeleteTorrentModal";
 import MediaArtwork from "./MediaArtwork";
 import type { Torrent } from "../api/types";
+
+export const TORRENT_GRID_MIN_CARD_PX = 240;
+export const TORRENT_GRID_GAP_PX = 20;
+export const TORRENT_GRID_PADDING_PX = 20;
+export const TORRENT_GRID_INITIAL_WIDTH = 1200;
+export const TORRENT_GRID_INITIAL_HEIGHT = 900;
+const TORRENT_GRID_BODY_ESTIMATE_PX = 230;
+
+export function torrentGridColumnCount(viewportWidth: number): number {
+  const inner = Math.max(0, viewportWidth - TORRENT_GRID_PADDING_PX * 2);
+  if (inner <= 0) return 1;
+  return Math.max(
+    1,
+    Math.floor(
+      (inner + TORRENT_GRID_GAP_PX) / (TORRENT_GRID_MIN_CARD_PX + TORRENT_GRID_GAP_PX),
+    ),
+  );
+}
+
+export function torrentGridRowEstimate(
+  viewportWidth: number,
+  columnCount: number,
+): number {
+  const inner = Math.max(
+    TORRENT_GRID_MIN_CARD_PX,
+    viewportWidth - TORRENT_GRID_PADDING_PX * 2,
+  );
+  const columns = Math.max(1, columnCount);
+  const columnWidth =
+    columns === 1
+      ? inner
+      : (inner - TORRENT_GRID_GAP_PX * (columns - 1)) / columns;
+  return Math.round(columnWidth * 1.5 + TORRENT_GRID_BODY_ESTIMATE_PX);
+}
 
 export interface TorrentGridProps {
   torrents?: Torrent[];
@@ -60,7 +95,7 @@ function TorrentGrid({
 }: TorrentGridProps) {
   const { t } = useTranslation();
   const { canMutateTorrents, canDeleteTorrent } = usePermissions();
-  const { data: fetchedTorrents, isLoading } = useTorrents();
+  const { data: fetchedTorrents, isLoading, isError } = useTorrents();
   const torrents = propTorrents ?? fetchedTorrents;
   const { data: arrConnections } = useArrConnections();
   const startSeeding = useStartSeeding();
@@ -85,6 +120,72 @@ function TorrentGrid({
   }, []);
 
   const closeContextMenu = useCallback(() => { setContextMenu(null); }, []);
+
+  const filtered = useMemo(() => {
+    if (propTorrents) return propTorrents;
+    return filterTorrents(torrents, {
+      filter,
+      stateFilter,
+      trackerFilter,
+      categoryFilter,
+      tagFilter,
+      selectedTagIds,
+      tagMatchMode,
+    });
+  }, [
+    propTorrents,
+    torrents,
+    filter,
+    stateFilter,
+    trackerFilter,
+    categoryFilter,
+    tagFilter,
+    selectedTagIds,
+    tagMatchMode,
+  ]);
+
+  const parentRef = useRef<HTMLDivElement>(null);
+  const [measuredWidth, setMeasuredWidth] = useState(0);
+  const layoutWidth =
+    measuredWidth > 0 ? measuredWidth : TORRENT_GRID_INITIAL_WIDTH;
+  const columnCount = torrentGridColumnCount(layoutWidth);
+  const rowCount =
+    filtered.length === 0 ? 0 : Math.ceil(filtered.length / columnCount);
+  // A failed background refetch sets isError while cached rows are still
+  // present. Replace the grid only when there is nothing left to show.
+  const showLoadError =
+    isError && filtered.length === 0 && fetchedTorrents == null;
+  const showRefreshWarning = isError && !showLoadError;
+  const showCards = !isLoading && !showLoadError && filtered.length > 0;
+
+  const rowVirtualizer = useVirtualizer({
+    count: showCards ? rowCount : 0,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => torrentGridRowEstimate(layoutWidth, columnCount),
+    overscan: 2,
+    gap: TORRENT_GRID_GAP_PX,
+    paddingStart: TORRENT_GRID_PADDING_PX,
+    paddingEnd: TORRENT_GRID_PADDING_PX,
+    initialRect: {
+      width: TORRENT_GRID_INITIAL_WIDTH,
+      height: TORRENT_GRID_INITIAL_HEIGHT,
+    },
+  });
+
+  useEffect(() => {
+    const element = parentRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const publish = () => {
+      const next = element.clientWidth;
+      setMeasuredWidth((prev) => (prev === next ? prev : next));
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [showCards]);
 
   if (isLoading) {
     return (
@@ -148,35 +249,63 @@ function TorrentGrid({
     );
   }
 
-  const filtered = propTorrents
-    ? propTorrents
-    : filterTorrents(torrents, {
-        filter,
-        stateFilter,
-        trackerFilter,
-        categoryFilter,
-        tagFilter,
-        selectedTagIds,
-        tagMatchMode,
-      });
+  if (showLoadError) {
+    return <p className="error">Failed to load data.</p>;
+  }
 
   if (filtered.length === 0) {
     return (
-      <div className="torrent-grid-empty">
-        {t("torrents.noTorrents", undefined, "No torrents found")}
-      </div>
+      <>
+        {showRefreshWarning && (
+          <p className="error" role="alert">
+            Failed to refresh torrents.
+          </p>
+        )}
+        <div className="torrent-grid-empty">
+          {t("torrents.noTorrents", undefined, "No torrents found")}
+        </div>
+      </>
     );
   }
+
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const rowsToRender =
+    virtualRows.length > 0
+      ? virtualRows.map((row) => ({
+          key: row.key,
+          index: row.index,
+          start: row.start,
+        }))
+      : Array.from({ length: Math.min(rowCount, 4) }, (_, index) => ({
+          key: `fallback-${index}`,
+          index,
+          start:
+            TORRENT_GRID_PADDING_PX +
+            index *
+              (torrentGridRowEstimate(layoutWidth, columnCount) +
+                TORRENT_GRID_GAP_PX),
+        }));
 
   return (
     <div
       style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-        gridAutoRows: "max-content",
-        alignContent: "start",
-        gap: "1.25rem",
-        padding: "1.25rem",
+        display: "flex",
+        flexDirection: "column",
+        flex: "1 1 0%",
+        minHeight: 0,
+        height: "100%",
+        width: "100%",
+        position: "relative",
+      }}
+    >
+      {showRefreshWarning && (
+        <p className="error" role="alert">
+          Failed to refresh torrents.
+        </p>
+      )}
+    <div
+      ref={parentRef}
+      style={{
         overflowY: "auto",
         overflowX: "hidden",
         flex: "1 1 0%",
@@ -185,7 +314,36 @@ function TorrentGrid({
         width: "100%",
       }}
     >
-      {filtered.map((torrent) => {
+      <div
+        style={{
+          height: rowVirtualizer.getTotalSize(),
+          width: "100%",
+          position: "relative",
+        }}
+      >
+      {rowsToRender.map((virtualRow) => {
+        const start = virtualRow.index * columnCount;
+        const rowItems = filtered.slice(start, start + columnCount);
+        return (
+          <div
+            key={virtualRow.key}
+            data-index={virtualRow.index}
+            ref={rowVirtualizer.measureElement}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              transform: `translateY(${virtualRow.start}px)`,
+              display: "grid",
+              gridTemplateColumns: `repeat(${columnCount}, minmax(${TORRENT_GRID_MIN_CARD_PX}px, 1fr))`,
+              gap: TORRENT_GRID_GAP_PX,
+              paddingLeft: TORRENT_GRID_PADDING_PX,
+              paddingRight: TORRENT_GRID_PADDING_PX,
+              boxSizing: "border-box",
+            }}
+          >
+      {rowItems.map((torrent) => {
         const displayTitle = torrent.mediaTitle || torrent.name;
         const isSelected =
           selectedTorrentId === torrent.id ||
@@ -710,6 +868,11 @@ function TorrentGrid({
           </div>
         );
       })}
+          </div>
+        );
+      })}
+      </div>
+    </div>
 
       {contextMenu && (
         <TorrentContextMenu
