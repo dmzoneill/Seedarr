@@ -203,7 +203,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
     private static string SessionStartKey(int torrentId, string url)
     {
-        return torrentId.ToString(CultureInfo.InvariantCulture) + "\n" + (url ?? string.Empty).Trim();
+        return torrentId + "\n" + (url ?? string.Empty).Trim();
     }
 
     private bool NeedsSessionStart(TrackerEntry entry)
