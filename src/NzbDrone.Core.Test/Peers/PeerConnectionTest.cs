@@ -2330,6 +2330,197 @@ public class PeerConnectionTest
         stall.Release();
     }
 
+    [Test]
+    public void Send_paths_ignore_null_and_disposed_connections()
+    {
+        var stream = new MemoryStream();
+        var conn = new PeerConnection(stream, "127.0.0.1", 4201);
+        _connections.Add(conn);
+
+        Assert.DoesNotThrow(() => conn.SendMessage(null));
+        Assert.DoesNotThrow(() => conn.PostMessage(null));
+        conn.SendMessage(new PeerMessage { Type = PeerMessageType.Choke });
+        Assert.That(stream.Length, Is.EqualTo(5));
+
+        conn.Dispose();
+        Assert.DoesNotThrow(() => conn.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke }));
+        Assert.DoesNotThrow(() => conn.PostMessage(new PeerMessage { Type = PeerMessageType.Unchoke }));
+        Assert.DoesNotThrow(() => conn.SendKeepAlive());
+    }
+
+    [Test]
+    public void SendRaw_rejects_empty_payloads()
+    {
+        var conn = new PeerConnection(new MemoryStream(), "127.0.0.1", 4202);
+        _connections.Add(conn);
+        var sendRaw = typeof(PeerConnection).GetMethod("SendRaw", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        Assert.That(sendRaw.Invoke(conn, new object[] { null, 4, true }), Is.False);
+        Assert.That(sendRaw.Invoke(conn, new object[] { new byte[4], 0, false }), Is.False);
+    }
+
+    [Test]
+    public void Non_positive_write_timeout_falls_back_to_the_default()
+    {
+        var (client, _) = CreateTestPair();
+        client.WriteTimeoutMs = 0;
+        client.SendKeepAlive();
+
+        var tcp = (TcpClient)typeof(PeerConnection)
+            .GetField("_client", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .GetValue(client);
+        Assert.That(tcp.Client.SendTimeout, Is.EqualTo(PeerConnection.DefaultSocketWriteTimeoutMs));
+    }
+
+    [Test]
+    public void SendMessage_propagates_MessageSent_handler_failures_without_dropping_the_peer()
+    {
+        var stream = new MemoryStream();
+        var conn = new PeerConnection(stream, "127.0.0.1", 4203);
+        _connections.Add(conn);
+        conn.MessageSent += (_, _) => throw new InvalidOperationException("handler failed");
+
+        var error = Assert.Throws<InvalidOperationException>(() => conn.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke }));
+
+        Assert.That(error.Message, Is.EqualTo("handler failed"));
+        Assert.That(conn.IsDisposed, Is.False);
+        Assert.That(stream.Length, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void Paced_write_continues_when_the_pace_observer_throws()
+    {
+        var stream = new MemoryStream();
+        var conn = new PeerConnection(stream, "127.0.0.1", 4204)
+        {
+            UploadRateLimit = 100_000,
+            PacingChunkSize = 2048
+        };
+        _connections.Add(conn);
+        conn.OnWriteChunkPaced = (_, _) => throw new InvalidOperationException("pace observer failed");
+        var previous = PeerConnection.PaceWaitHandler;
+        PeerConnection.PaceWaitHandler = (_, _) => { };
+
+        try
+        {
+            var payload = new byte[8192];
+            Assert.DoesNotThrow(() => conn.SendMessage(new PeerMessage
+            {
+                Type = PeerMessageType.Piece,
+                Payload = payload,
+                PayloadLength = payload.Length
+            }));
+            Assert.That(stream.Length, Is.EqualTo(8197));
+        }
+        finally
+        {
+            PeerConnection.PaceWaitHandler = previous;
+        }
+    }
+
+    [Test]
+    public void SendMessage_without_a_bandwidth_limiter_still_writes()
+    {
+        var stream = new MemoryStream();
+        var conn = new PeerConnection(stream, "127.0.0.1", 4205)
+        {
+            BandwidthLimiter = null
+        };
+        _connections.Add(conn);
+
+        conn.SendMessage(new PeerMessage { Type = PeerMessageType.Interested });
+
+        Assert.That(stream.Length, Is.EqualTo(5));
+    }
+
+    [Test]
+    [CancelAfter(10000)]
+    public void Messages_queued_behind_a_failed_write_are_failed()
+    {
+        var stall = new StallStream();
+        var conn = new PeerConnection(stall, "10.0.0.12", 4206)
+        {
+            WriteTimeoutMs = 200
+        };
+        _connections.Add(conn);
+
+        var first = Task.Run(() => conn.SendMessage(new PeerMessage
+        {
+            Type = PeerMessageType.Piece,
+            Payload = new byte[8],
+            PayloadLength = 8
+        }));
+        Assert.That(() => stall.WriteEntered > 0, Is.True.After(3000, 10));
+        var second = Task.Run(() => conn.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke }));
+
+        Assert.That(() => first.IsCompleted, Is.True.After(3000, 20));
+        Assert.That(first.IsFaulted, Is.True);
+        Assert.That(first.Exception.InnerException, Is.TypeOf<TimeoutException>());
+        Assert.That(() => second.IsCompleted, Is.True.After(3000, 20));
+        Assert.That(second.IsFaulted, Is.True);
+        Assert.That(second.Exception.InnerException, Is.TypeOf<IOException>());
+        Assert.That(conn.IsDisposed, Is.True);
+    }
+
+    [Test]
+    [CancelAfter(10000)]
+    public void PostMessage_disconnects_when_the_outbound_queue_is_full()
+    {
+        var stall = new StallStream();
+        var conn = new PeerConnection(stall, "10.0.0.13", 4207)
+        {
+            WriteTimeoutMs = 60_000
+        };
+        _connections.Add(conn);
+        Task blocked = null;
+        try
+        {
+            blocked = Task.Run(() => conn.SendMessage(new PeerMessage
+            {
+                Type = PeerMessageType.Piece,
+                Payload = new byte[8],
+                PayloadLength = 8
+            }));
+            Assert.That(() => stall.WriteEntered > 0, Is.True.After(3000, 10));
+
+            for (var i = 0; i < PeerConnection.OutboundQueueCapacity; i++)
+            {
+                conn.PostMessage(new PeerMessage { Type = PeerMessageType.Interested });
+            }
+
+            var error = Assert.Throws<IOException>(() => conn.PostMessage(new PeerMessage { Type = PeerMessageType.Choke }));
+            Assert.That(error.Message, Does.Contain("outbound queue is full"));
+            Assert.That(conn.IsDisposed, Is.True);
+        }
+        finally
+        {
+            stall.Release();
+            try
+            {
+                blocked?.Wait(TimeSpan.FromSeconds(2));
+            }
+            catch (AggregateException)
+            {
+            }
+        }
+    }
+
+    [Test]
+    public void Dispose_tolerates_an_already_disposed_writer_token()
+    {
+        var conn = new PeerConnection(new MemoryStream(), "127.0.0.1", 4208);
+        _connections.Add(conn);
+        conn.SendKeepAlive();
+
+        var cts = (CancellationTokenSource)typeof(PeerConnection)
+            .GetField("_writerCts", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .GetValue(conn);
+        cts.Dispose();
+
+        Assert.DoesNotThrow(() => conn.Dispose());
+        Assert.That(conn.IsDisposed, Is.True);
+    }
+
     private sealed class StallStream : MemoryStream
     {
         private readonly ManualResetEventSlim _release = new(false);

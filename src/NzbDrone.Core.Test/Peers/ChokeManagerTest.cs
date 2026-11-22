@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
@@ -1106,6 +1107,121 @@ public class ChokeManagerTest
             stalled.Dispose();
             other.Dispose();
         }
+    }
+
+    [Test]
+    public void PeerUnchoked_handler_exception_does_not_escape_the_unchoke_round()
+    {
+        _configService.MaxUploadSlots.Returns(0);
+        var peer = CreatePeer("hashA", 1501);
+        _subject.PeerUnchoked += _ => throw new InvalidOperationException("listener failed");
+
+        Assert.DoesNotThrow(() => _subject.ProcessRegularUnchoke());
+        Assert.That(peer.AmChoking, Is.False);
+    }
+
+    [Test]
+    [CancelAfter(15000)]
+    public void Choke_and_unchoke_swallow_a_full_outbound_queue()
+    {
+        _configService.MaxUploadSlots.Returns(0);
+        var chokeStall = new StallStream();
+        var unchokeStall = new StallStream();
+        var toChoke = new PeerConnection(chokeStall, "10.0.0.3", 4301)
+        {
+            InfoHash = "hashChoke",
+            PeerInterested = true,
+            AmChoking = false,
+            WriteTimeoutMs = 60_000
+        };
+        var toUnchoke = new PeerConnection(unchokeStall, "10.0.0.4", 4302)
+        {
+            InfoHash = "hashUnchoke",
+            PeerInterested = true,
+            AmChoking = true,
+            WriteTimeoutMs = 60_000
+        };
+        _connections.Add(toChoke);
+        _connections.Add(toUnchoke);
+
+        Task chokeUpload = null;
+        Task unchokeUpload = null;
+        try
+        {
+            chokeUpload = Task.Run(() => toChoke.SendMessage(new PeerMessage
+            {
+                Type = PeerMessageType.Piece,
+                Payload = new byte[8],
+                PayloadLength = 8
+            }));
+            unchokeUpload = Task.Run(() => toUnchoke.SendMessage(new PeerMessage
+            {
+                Type = PeerMessageType.Piece,
+                Payload = new byte[8],
+                PayloadLength = 8
+            }));
+
+            Assert.That(() => chokeStall.WriteEntered > 0 && unchokeStall.WriteEntered > 0, Is.True.After(3000, 10));
+
+            for (var i = 0; i < PeerConnection.OutboundQueueCapacity; i++)
+            {
+                toChoke.PostMessage(new PeerMessage { Type = PeerMessageType.Interested });
+                toUnchoke.PostMessage(new PeerMessage { Type = PeerMessageType.Interested });
+            }
+
+            Assert.DoesNotThrow(() => _subject.Choke(toChoke));
+            Assert.That(toChoke.AmChoking, Is.True);
+
+            Assert.DoesNotThrow(() => _subject.ProcessRegularUnchoke());
+            Assert.That(toUnchoke.AmChoking, Is.False);
+        }
+        finally
+        {
+            chokeStall.Release();
+            unchokeStall.Release();
+            try
+            {
+                chokeUpload?.Wait(TimeSpan.FromSeconds(2));
+            }
+            catch (AggregateException)
+            {
+            }
+
+            try
+            {
+                unchokeUpload?.Wait(TimeSpan.FromSeconds(2));
+            }
+            catch (AggregateException)
+            {
+            }
+
+            toChoke.Dispose();
+            toUnchoke.Dispose();
+        }
+    }
+
+    [Test]
+    public void Choke_lock_edges_release_once_and_isolate_callback_failures()
+    {
+        var defer = typeof(ChokeManager).GetMethod("DeferAfterLock", BindingFlags.Instance | BindingFlags.NonPublic);
+        var runAfter = typeof(ChokeManager).GetMethod("RunAfterLock", BindingFlags.Instance | BindingFlags.NonPublic);
+        var enter = typeof(ChokeManager).GetMethod("EnterLock", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.DoesNotThrow(() => defer.Invoke(_subject, new object[] { null }));
+
+        var ran = false;
+        defer.Invoke(_subject, new object[] { (Action)(() => ran = true) });
+        Assert.That(ran, Is.True);
+
+        Assert.DoesNotThrow(() => runAfter.Invoke(_subject, new object[] { null }));
+        Assert.DoesNotThrow(() => runAfter.Invoke(
+            _subject,
+            new object[] { new List<Action> { () => throw new InvalidOperationException("post-lock failed") } }));
+
+        var scope = enter.Invoke(_subject, null);
+        var dispose = scope.GetType().GetMethod("Dispose");
+        dispose.Invoke(scope, null);
+        dispose.Invoke(scope, null);
     }
 
     private sealed class StallStream : MemoryStream
