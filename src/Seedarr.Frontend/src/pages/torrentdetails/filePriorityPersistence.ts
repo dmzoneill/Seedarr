@@ -81,40 +81,70 @@ function errorMessage(error: unknown): string {
     : "Failed to update file priority";
 }
 
+function toNumberMap<T>(record: Record<number, T>): Map<number, T> {
+  const map = new Map<number, T>();
+  for (const [key, value] of Object.entries(record)) {
+    const id = Number(key);
+    if (Number.isInteger(id)) {
+      map.set(id, value);
+    }
+  }
+  return map;
+}
+
+function fromNumberMap<T>(map: Map<number, T>): Record<number, T> {
+  return Object.fromEntries(map) as Record<number, T>;
+}
+
+function restoreMapValue<T>(
+  current: Map<number, T>,
+  previous: Map<number, T>,
+  id: number,
+): void {
+  if (previous.has(id)) {
+    const value = previous.get(id);
+    if (value !== undefined) {
+      current.set(id, value);
+    }
+    return;
+  }
+
+  current.delete(id);
+}
+
 function rollbackIds(
   current: FilePriorityState,
   previous: FilePriorityState,
   optimistic: FilePriorityState,
   fileIds: number[],
 ): FilePriorityState | null {
-  const priorities = { ...current.priorities };
-  const wanted = { ...current.wanted };
+  const priorities = toNumberMap(current.priorities);
+  const wanted = toNumberMap(current.wanted);
+  const previousPriorities = toNumberMap(previous.priorities);
+  const previousWanted = toNumberMap(previous.wanted);
+  const optimisticPriorities = toNumberMap(optimistic.priorities);
+  const optimisticWanted = toNumberMap(optimistic.wanted);
   let changed = false;
 
   for (const id of fileIds) {
     if (
-      priorities[id] !== optimistic.priorities[id] ||
-      wanted[id] !== optimistic.wanted[id]
+      priorities.get(id) !== optimisticPriorities.get(id) ||
+      wanted.get(id) !== optimisticWanted.get(id)
     ) {
       continue;
     }
 
-    if (Object.prototype.hasOwnProperty.call(previous.priorities, id)) {
-      priorities[id] = previous.priorities[id];
-    } else {
-      delete priorities[id];
-    }
-
-    if (Object.prototype.hasOwnProperty.call(previous.wanted, id)) {
-      wanted[id] = previous.wanted[id];
-    } else {
-      delete wanted[id];
-    }
-
+    restoreMapValue(priorities, previousPriorities, id);
+    restoreMapValue(wanted, previousWanted, id);
     changed = true;
   }
 
-  return changed ? { priorities, wanted } : null;
+  return changed
+    ? {
+        priorities: fromNumberMap(priorities),
+        wanted: fromNumberMap(wanted),
+      }
+    : null;
 }
 
 function applyPriority(
@@ -129,13 +159,16 @@ function applyPriority(
 
   const previous = deps.getState();
   const isWanted = formatPriority(priority) !== "Do Not Download";
-  const priorities = { ...previous.priorities };
-  const wanted = { ...previous.wanted };
+  const priorities = toNumberMap(previous.priorities);
+  const wanted = toNumberMap(previous.wanted);
   for (const id of ids) {
-    priorities[id] = priority;
-    wanted[id] = isWanted;
+    priorities.set(id, priority);
+    wanted.set(id, isWanted);
   }
-  const optimistic = { priorities, wanted };
+  const optimistic = {
+    priorities: fromNumberMap(priorities),
+    wanted: fromNumberMap(wanted),
+  };
   deps.setState(optimistic);
 
   const apiPriority = toApiFilePriority(priority);
