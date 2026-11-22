@@ -216,4 +216,67 @@ public class TorrentEventLogServiceTest
 
         _repository.Received(1).DeleteByTorrentId(42);
     }
+
+    [Test]
+    public async Task DropOldest_does_not_leak_pending_count_or_stall_flush()
+    {
+        _subject.Dispose();
+
+        var inserted = 0;
+        using var insertGate = new ManualResetEventSlim(false);
+        _repository.When(r => r.InsertMany(Arg.Any<IEnumerable<TorrentEventLog>>()))
+            .Do(callInfo =>
+            {
+                insertGate.Wait(TimeSpan.FromSeconds(30));
+                Interlocked.Add(ref inserted, callInfo.Arg<IEnumerable<TorrentEventLog>>().Count());
+            });
+
+        _subject = new TorrentEventLogService(_repository);
+
+        const int enqueued = 20_000;
+        for (var i = 0; i < enqueued; i++)
+        {
+            _subject.Info(1, "Peer", $"event {i}");
+        }
+
+        insertGate.Set();
+
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        var stableReads = 0;
+        var lastPending = int.MinValue;
+        var pending = 0;
+        while (DateTime.UtcNow < deadline)
+        {
+            pending = ReadPendingCount(_subject);
+            var persisted = Volatile.Read(ref inserted);
+            if (persisted > 0 && persisted < enqueued && pending == lastPending)
+            {
+                stableReads++;
+                if (stableReads >= 5)
+                {
+                    break;
+                }
+            }
+            else
+            {
+                stableReads = 0;
+            }
+
+            lastPending = pending;
+            Thread.Sleep(30);
+        }
+
+        Assert.That(Volatile.Read(ref inserted), Is.GreaterThan(0).And.LessThan(enqueued), "channel should drop logs once it is full");
+        Assert.That(pending, Is.EqualTo(0), "DropOldest drops must not leave _pendingCount above zero");
+
+        var started = DateTime.UtcNow;
+        await _subject.FlushAsync();
+        Assert.That(DateTime.UtcNow - started, Is.LessThan(TimeSpan.FromSeconds(2)));
+    }
+
+    private static int ReadPendingCount(TorrentEventLogService service)
+    {
+        var field = typeof(TorrentEventLogService).GetField("_pendingCount", BindingFlags.NonPublic | BindingFlags.Instance);
+        return (int)field.GetValue(service);
+    }
 }
