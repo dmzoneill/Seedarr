@@ -568,7 +568,7 @@ public class SuperSeedingTests
         _server.HandleMessage(server1, haveAllMsg, torrent);
 
         Assert.That(torrent.SuperSeeding, Is.False);
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 10 && !t.SuperSeeding));
+        _torrentService.Received(1).UpdateSuperSeeding(10, false);
         _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 10 && e.Reason == "secondary seed joined"));
 
         var msg = client1.ReceiveMessage();
@@ -607,7 +607,7 @@ public class SuperSeedingTests
         _server.HandleMessage(server1, bitfieldMsg, torrent);
 
         Assert.That(torrent.SuperSeeding, Is.False);
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 11 && !t.SuperSeeding));
+        _torrentService.Received(1).UpdateSuperSeeding(11, false);
         _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 11 && e.Reason == "secondary seed joined"));
 
         var msg = client1.ReceiveMessage();
@@ -657,7 +657,7 @@ public class SuperSeedingTests
         _server.HandleMessage(server2, bitfield2Msg, torrent);
 
         Assert.That(torrent.SuperSeeding, Is.False);
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 12 && !t.SuperSeeding));
+        _torrentService.Received(1).UpdateSuperSeeding(12, false);
         _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 12 && e.Reason == "swarm availability >= 1.0"));
 
         var msg1 = client1.ReceiveMessage();

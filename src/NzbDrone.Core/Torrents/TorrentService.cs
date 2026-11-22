@@ -25,6 +25,12 @@ public interface ITorrentService
     Torrent Add(Torrent torrent);
     Torrent Update(Torrent torrent);
     void UpdateMany(IEnumerable<Torrent> torrents);
+    int UpdateRuntimeStats(IEnumerable<TorrentRuntimeWrite> writes);
+    int TryTransitionStatuses(IEnumerable<TorrentStatusTransition> transitions);
+    void ClearActivity(IEnumerable<int> torrentIds);
+    void UpdateSwarmStats(int torrentId, int seeders, int leechers, double? availability);
+    void UpdateExecutionStates(IEnumerable<TorrentExecutionWrite> writes);
+    void UpdateSuperSeeding(int torrentId, bool superSeeding);
     Torrent UpdateUserFields(int id, Torrent updates);
     Torrent UpdateUserFields(Torrent torrent);
     void Delete(int id, bool deleteFiles = false);
@@ -289,14 +295,55 @@ public class TorrentService : ITorrentService,
 
     public void UpdateMany(IEnumerable<Torrent> torrents)
     {
-        var list = torrents as IList<Torrent> ?? torrents.ToList();
-        if (list.Count == 0)
+        var list = torrents as IList<Torrent> ?? torrents?.ToList();
+        if (list == null || list.Count == 0)
         {
             return;
         }
 
         _logger.Debug("Batch updating {0} torrents", list.Count);
         _repository.UpdateMany(list);
+    }
+
+    public int UpdateRuntimeStats(IEnumerable<TorrentRuntimeWrite> writes)
+    {
+        return _repository.UpdateRuntimeStats(writes);
+    }
+
+    public int TryTransitionStatuses(IEnumerable<TorrentStatusTransition> transitions)
+    {
+        return _repository.TryTransitionStatuses(transitions);
+    }
+
+    public void ClearActivity(IEnumerable<int> torrentIds)
+    {
+        _repository.ClearActivity(torrentIds);
+    }
+
+    public void UpdateSwarmStats(int torrentId, int seeders, int leechers, double? availability)
+    {
+        _repository.UpdateSwarmStats(torrentId, seeders, leechers, availability);
+        var torrent = _repository.Get(torrentId);
+        if (torrent != null)
+        {
+            PublishUpdated(torrent);
+        }
+    }
+
+    public void UpdateExecutionStates(IEnumerable<TorrentExecutionWrite> writes)
+    {
+        var list = writes as IList<TorrentExecutionWrite> ?? writes?.ToList();
+        if (list == null || list.Count == 0)
+        {
+            return;
+        }
+
+        _repository.UpdateExecutionStates(list);
+    }
+
+    public void UpdateSuperSeeding(int torrentId, bool superSeeding)
+    {
+        _repository.UpdateSuperSeeding(torrentId, superSeeding);
     }
 
     public Torrent UpdateUserFields(int id, Torrent updates)
@@ -307,8 +354,27 @@ public class TorrentService : ITorrentService,
             return null;
         }
 
+        var originalStatus = existing.Status;
         existing.ApplyUserFields(updates);
-        return Update(existing);
+        _repository.UpdateUserColumns(existing);
+        if (existing.Status != originalStatus)
+        {
+            _repository.UpdateExecutionStates(new[]
+            {
+                new TorrentExecutionWrite
+                {
+                    Id = existing.Id,
+                    Status = (int)existing.Status,
+                    Active = existing.Active,
+                    UploadSpeed = existing.UploadSpeed,
+                    DownloadSpeed = existing.DownloadSpeed
+                }
+            });
+        }
+
+        PopulatePieceHashes(existing);
+        PublishUpdated(existing);
+        return existing;
     }
 
     public Torrent UpdateUserFields(Torrent torrent)
@@ -722,7 +788,7 @@ public class TorrentService : ITorrentService,
 
             if (toUpdate.Count > 0)
             {
-                _repository.UpdateMany(toUpdate);
+                _repository.UpdateSortOrders(toUpdate);
             }
         }
     }
@@ -797,7 +863,7 @@ public class TorrentService : ITorrentService,
 
             if (changed.Count > 0)
             {
-                _repository.UpdateMany(changed);
+                _repository.UpdateSortOrders(changed);
             }
         }
     }
@@ -858,7 +924,7 @@ public class TorrentService : ITorrentService,
             _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Paused, reason));
         }
 
-        _repository.UpdateMany(activeTorrents);
+        _repository.UpdateExecutionStates(activeTorrents.Select(t => ToExecutionWrite(t, setIsVpnPaused: true)));
         foreach (var torrent in activeTorrents)
         {
             _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
@@ -899,7 +965,7 @@ public class TorrentService : ITorrentService,
             _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, torrent.Status, reason));
         }
 
-        _repository.UpdateMany(pausedTorrents);
+        _repository.UpdateExecutionStates(pausedTorrents.Select(t => ToExecutionWrite(t, setIsVpnPaused: true)));
         foreach (var torrent in pausedTorrents)
         {
             _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
@@ -927,7 +993,9 @@ public class TorrentService : ITorrentService,
             torrent.ErrorMessage = null;
         }
 
-        var updated = Update(torrent);
+        _repository.UpdateExecutionStates(new[] { ToExecutionWrite(torrent) });
+        PublishUpdated(torrent);
+        var updated = torrent;
         _logger.Info("[State Machine] Torrent #{0} ('{1}') started/resumed (Status: {2} -> {3}).",
             torrent.Id, torrent.Name, oldStatus, torrent.Status);
         _torrentEventLogService?.Info(torrent.Id, "State Machine", $"Torrent started/resumed (Status: {oldStatus} -> {torrent.Status})");
@@ -945,13 +1013,25 @@ public class TorrentService : ITorrentService,
         }
 
         var oldStatus = torrent.Status;
+        _repository.UpdateExecutionStates(new[]
+        {
+            new TorrentExecutionWrite
+            {
+                Id = torrent.Id,
+                Status = (int)TorrentStatus.Paused,
+                Active = false,
+                UploadSpeed = 0,
+                DownloadSpeed = 0
+            }
+        });
         torrent.Pause();
         if (!string.IsNullOrEmpty(reason))
         {
             torrent.ErrorMessage = reason;
         }
 
-        var updated = Update(torrent);
+        PublishUpdated(torrent);
+        var updated = torrent;
         var effectiveReason = !string.IsNullOrEmpty(reason) ? reason : "User requested pause";
         _logger.Info("[State Machine] Torrent #{0} ('{1}') pause requested (Status: {2} -> Paused) [Reason: {3}].",
             torrent.Id, torrent.Name, oldStatus, effectiveReason);
@@ -1036,7 +1116,7 @@ public class TorrentService : ITorrentService,
             _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Paused, reason));
         }
 
-        _repository.UpdateMany(matchingTorrents);
+        _repository.UpdateExecutionStates(matchingTorrents.Select(t => ToExecutionWrite(t)));
         foreach (var torrent in matchingTorrents)
         {
             _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
@@ -1104,12 +1184,37 @@ public class TorrentService : ITorrentService,
             _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Paused, torrent.Status, $"Disk space restored on volume '{message.DrivePath}'"));
         }
 
-        _repository.UpdateMany(torrentsToResume);
+        _repository.UpdateExecutionStates(torrentsToResume.Select(t => ToExecutionWrite(t)));
         foreach (var torrent in torrentsToResume)
         {
             _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
             _eventAggregator.PublishEvent(new TorrentUpdatedEvent(torrent));
         }
+    }
+
+    private void PublishUpdated(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return;
+        }
+
+        _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+        _eventAggregator.PublishEvent(new TorrentUpdatedEvent(torrent));
+    }
+
+    private static TorrentExecutionWrite ToExecutionWrite(Torrent torrent, bool setIsVpnPaused = false)
+    {
+        return new TorrentExecutionWrite
+        {
+            Id = torrent.Id,
+            Status = (int)torrent.Status,
+            Active = torrent.Active,
+            UploadSpeed = torrent.UploadSpeed,
+            DownloadSpeed = torrent.DownloadSpeed,
+            SetIsVpnPaused = setIsVpnPaused ? 1 : 0,
+            IsVpnPaused = torrent.IsVpnPaused
+        };
     }
 
     private bool MatchesVolume(string savePath, string volumePath)

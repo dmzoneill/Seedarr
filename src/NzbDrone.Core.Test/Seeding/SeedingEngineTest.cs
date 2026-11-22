@@ -115,7 +115,7 @@ public class SeedingEngineTest
         Assert.That(stopped.UploadSpeed, Is.EqualTo(0));
         Assert.That(stopped.DownloadSpeed, Is.EqualTo(0));
         Assert.That(stopped.Active, Is.False);
-        _torrentService.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(l => l.Contains(stopped)));
+        _torrentService.Received(1).ClearActivity(Arg.Is<IEnumerable<int>>(ids => ids.Contains(stopped.Id)));
     }
 
     [Test]
@@ -240,8 +240,8 @@ public class SeedingEngineTest
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
         Assert.That(torrent.UploadSpeed, Is.EqualTo(0));
         Assert.That(torrent.Active, Is.False);
-        _torrentService.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(torrents =>
-            torrents.Any(t => t.Id == 1 && t.Status == TorrentStatus.Stopped)));
+        _torrentService.Received(1).TryTransitionStatuses(Arg.Is<IEnumerable<TorrentStatusTransition>>(items =>
+            items.Any(t => t.Id == 1 && t.ExpectedStatus == (int)TorrentStatus.Seeding && t.Status == (int)TorrentStatus.Stopped)));
     }
 
     [Test]
@@ -266,8 +266,8 @@ public class SeedingEngineTest
         CallTick();
 
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
-        _torrentService.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(torrents =>
-            torrents.Any(t => t.Id == 1 && t.Status == TorrentStatus.Stopped)));
+        _torrentService.Received(1).TryTransitionStatuses(Arg.Is<IEnumerable<TorrentStatusTransition>>(items =>
+            items.Any(t => t.Id == 1 && t.ExpectedStatus == (int)TorrentStatus.Seeding && t.Status == (int)TorrentStatus.Stopped)));
         _eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentSeedGoalReachedEvent>());
         _eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentRatioReachedEvent>());
 
@@ -307,8 +307,8 @@ public class SeedingEngineTest
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
         Assert.That(torrent.UploadSpeed, Is.EqualTo(0));
         Assert.That(torrent.Active, Is.False);
-        _torrentService.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(torrents =>
-            torrents.Any(t => t.Id == 1 && t.Status == TorrentStatus.Paused)));
+        _torrentService.Received(1).TryTransitionStatuses(Arg.Is<IEnumerable<TorrentStatusTransition>>(items =>
+            items.Any(t => t.Id == 1 && t.ExpectedStatus == (int)TorrentStatus.Seeding && t.Status == (int)TorrentStatus.Paused)));
     }
 
     [Test]
@@ -2292,7 +2292,7 @@ public class SeedingEngineTest
         CallTick();
 
         Assert.That(torrent.SuperSeeding, Is.False);
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 1 && !t.SuperSeeding));
+        _torrentService.Received(1).UpdateSuperSeeding(1, false);
         _eventLogService.Received(1).Info(1, "SuperSeeding", "Super-seeding completed: secondary seed joined");
         _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 1 && e.Reason == "secondary seed joined"));
         _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent.Id == 1 && !e.Torrent.SuperSeeding));
@@ -2323,7 +2323,7 @@ public class SeedingEngineTest
         CallTick();
 
         Assert.That(torrent.SuperSeeding, Is.False);
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 2 && !t.SuperSeeding));
+        _torrentService.Received(1).UpdateSuperSeeding(2, false);
         _eventLogService.Received(1).Info(2, "SuperSeeding", "Super-seeding completed: secondary seed joined");
         _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 2 && e.Reason == "secondary seed joined"));
     }
@@ -2365,7 +2365,7 @@ public class SeedingEngineTest
         CallTick();
 
         Assert.That(torrent.SuperSeeding, Is.False);
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 3 && !t.SuperSeeding));
+        _torrentService.Received(1).UpdateSuperSeeding(3, false);
         _eventLogService.Received(1).Info(3, "SuperSeeding", "Super-seeding completed: swarm availability >= 1.0");
         _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 3 && e.Reason == "swarm availability >= 1.0"));
         _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent.Id == 3 && !e.Torrent.SuperSeeding));
@@ -2451,7 +2451,7 @@ public class SeedingEngineTest
         method.Invoke(engineWithRepo, null);
 
         Assert.That(torrent.SuperSeeding, Is.False);
-        torrentRepo.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 5 && !t.SuperSeeding));
+        torrentRepo.Received(1).UpdateSuperSeeding(5, false);
     }
 
     [Test]
@@ -2793,8 +2793,9 @@ public class SeedingEngineTest
 
         Assert.That(queued1.Status, Is.EqualTo(TorrentStatus.Seeding));
         Assert.That(queued2.Status, Is.EqualTo(TorrentStatus.Seeding));
-        _torrentService.Received(1).Update(queued1);
-        _torrentService.Received(1).Update(queued2);
+        _torrentService.Received(1).TryTransitionStatuses(Arg.Is<IEnumerable<TorrentStatusTransition>>(items =>
+            items.Any(t => t.Id == queued1.Id && t.ExpectedStatus == (int)TorrentStatus.Queued && t.Status == (int)TorrentStatus.Seeding) &&
+            items.Any(t => t.Id == queued2.Id && t.ExpectedStatus == (int)TorrentStatus.Queued && t.Status == (int)TorrentStatus.Seeding)));
         _eventAggregator.Received().PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e =>
             e.Torrent.Id == 1 && e.OldStatus == TorrentStatus.Queued && e.NewStatus == TorrentStatus.Seeding && e.IsQueueManagerInternal));
         _eventAggregator.Received().PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e =>
@@ -2836,8 +2837,9 @@ public class SeedingEngineTest
 
         Assert.That(highPrio.Status, Is.EqualTo(TorrentStatus.Seeding));
         Assert.That(lowPrio.Status, Is.EqualTo(TorrentStatus.Queued));
-        _torrentService.Received(1).Update(highPrio);
-        _torrentService.DidNotReceive().Update(lowPrio);
+        _torrentService.Received(1).TryTransitionStatuses(Arg.Is<IEnumerable<TorrentStatusTransition>>(items =>
+            items.Any(t => t.Id == highPrio.Id && t.Status == (int)TorrentStatus.Seeding) &&
+            !items.Any(t => t.Id == lowPrio.Id)));
     }
 
     [Test]

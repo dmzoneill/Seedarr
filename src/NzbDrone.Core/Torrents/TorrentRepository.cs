@@ -285,4 +285,322 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
     {
         DeleteMany(new List<int> { id });
     }
+
+    public int UpdateRuntimeStats(IEnumerable<TorrentRuntimeWrite> writes)
+    {
+        var list = OrderById(writes);
+        if (list.Count == 0)
+        {
+            return 0;
+        }
+
+        // SQLite's scalar max is MAX(a, b). Postgres only has GREATEST for that. Counters move
+        // forward, and the status predicate drops a tick that lost a pause/stop race.
+        var max = Database.DatabaseType == DatabaseType.PostgreSQL ? "GREATEST" : "MAX";
+        var sql = $@"
+UPDATE ""{_table}"" SET
+    ""Uploaded"" = {max}(""Uploaded"", @Uploaded),
+    ""Downloaded"" = {max}(""Downloaded"", @Downloaded),
+    ""SeedingTime"" = {max}(""SeedingTime"", @SeedingTime),
+    ""SessionUploaded"" = CASE WHEN @Uploaded >= ""Uploaded"" THEN @SessionUploaded ELSE ""SessionUploaded"" END,
+    ""SessionDownloaded"" = CASE WHEN @Downloaded >= ""Downloaded"" THEN @SessionDownloaded ELSE ""SessionDownloaded"" END,
+    ""Ratio"" = CASE
+        WHEN {max}(""Downloaded"", @Downloaded) > 0 THEN ({max}(""Uploaded"", @Uploaded) * 1.0) / {max}(""Downloaded"", @Downloaded)
+        WHEN ""TotalSize"" > 0 THEN ({max}(""Uploaded"", @Uploaded) * 1.0) / ""TotalSize""
+        ELSE 0 END,
+    ""UploadSpeed"" = @UploadSpeed,
+    ""DownloadSpeed"" = @DownloadSpeed,
+    ""Progress"" = @Progress,
+    ""Eta"" = @Eta,
+    ""LastActive"" = @LastActive,
+    ""Active"" = @Active,
+    ""Seeders"" = @Seeders,
+    ""Leechers"" = @Leechers,
+    ""Availability"" = @Availability,
+    ""Threshold"" = CASE WHEN ""Threshold"" = 0 AND @Threshold <> 0 THEN @Threshold ELSE ""Threshold"" END
+WHERE ""Id"" = @Id AND ""Status"" = @ExpectedStatus";
+
+        return ExecuteInTransaction(sql, list);
+    }
+
+    public int TryTransitionStatuses(IEnumerable<TorrentStatusTransition> transitions)
+    {
+        var list = OrderById(transitions);
+        if (list.Count == 0)
+        {
+            return 0;
+        }
+
+        var sql = $@"
+UPDATE ""{_table}"" SET
+    ""Status"" = @Status,
+    ""Active"" = @Active,
+    ""UploadSpeed"" = @UploadSpeed,
+    ""DownloadSpeed"" = @DownloadSpeed,
+    ""LastActive"" = COALESCE(@LastActive, ""LastActive"")
+WHERE ""Id"" = @Id AND ""Status"" = @ExpectedStatus";
+
+        return ExecuteInTransaction(sql, list);
+    }
+
+    public void ClearActivity(IEnumerable<int> torrentIds)
+    {
+        var list = (torrentIds ?? Enumerable.Empty<int>())
+            .Where(id => id > 0)
+            .Distinct()
+            .OrderBy(id => id)
+            .Select(id => new ActivityClear(id))
+            .ToList();
+
+        if (list.Count == 0)
+        {
+            return;
+        }
+
+        var sql = $@"UPDATE ""{_table}"" SET ""UploadSpeed"" = 0, ""DownloadSpeed"" = 0, ""Active"" = @Active WHERE ""Id"" = @Id";
+        ExecuteInTransaction(sql, list);
+    }
+
+    public void UpdateSwarmStats(int torrentId, int seeders, int leechers, double? availability)
+    {
+        if (torrentId <= 0)
+        {
+            return;
+        }
+
+        var sql = $@"
+UPDATE ""{_table}"" SET
+    ""Seeders"" = @Seeders,
+    ""Leechers"" = @Leechers,
+    ""Availability"" = COALESCE(@Availability, ""Availability"")
+WHERE ""Id"" = @Id";
+
+        ExecuteWithRetry(connection =>
+            connection.Execute(sql, new
+            {
+                Id = torrentId,
+                Seeders = seeders,
+                Leechers = leechers,
+                Availability = availability
+            }));
+    }
+
+    public void UpdateExecutionStates(IEnumerable<TorrentExecutionWrite> writes)
+    {
+        var list = OrderById(writes);
+        if (list.Count == 0)
+        {
+            return;
+        }
+
+        var sql = $@"
+UPDATE ""{_table}"" SET
+    ""Status"" = @Status,
+    ""Active"" = @Active,
+    ""UploadSpeed"" = @UploadSpeed,
+    ""DownloadSpeed"" = @DownloadSpeed,
+    ""LastActive"" = CASE WHEN @SetLastActive = 1 THEN @LastActive ELSE ""LastActive"" END,
+    ""IsVpnPaused"" = CASE WHEN @SetIsVpnPaused = 1 THEN @IsVpnPaused ELSE ""IsVpnPaused"" END,
+    ""ForceStart"" = CASE WHEN @SetForceStart = 1 THEN @ForceStart ELSE ""ForceStart"" END
+WHERE ""Id"" = @Id";
+
+        ExecuteInTransaction(sql, list);
+    }
+
+    public void UpdateSuperSeeding(int torrentId, bool superSeeding)
+    {
+        if (torrentId <= 0)
+        {
+            return;
+        }
+
+        ExecuteWithRetry(connection =>
+            connection.Execute(
+                $@"UPDATE ""{_table}"" SET ""SuperSeeding"" = @SuperSeeding WHERE ""Id"" = @Id",
+                new { Id = torrentId, SuperSeeding = superSeeding }));
+    }
+
+    public void UpdateSortOrders(IEnumerable<Torrent> torrents)
+    {
+        var list = (torrents ?? Enumerable.Empty<Torrent>())
+            .Where(t => t != null && t.Id > 0)
+            .OrderBy(t => t.Id)
+            .Select(t => new SortWrite(t.Id, t.SortOrder))
+            .ToList();
+
+        if (list.Count == 0)
+        {
+            return;
+        }
+
+        ExecuteInTransaction(
+            $@"UPDATE ""{_table}"" SET ""SortOrder"" = @SortOrder WHERE ""Id"" = @Id",
+            list);
+    }
+
+    public void UpdateUserColumns(Torrent torrent)
+    {
+        if (torrent == null || torrent.Id <= 0)
+        {
+            return;
+        }
+
+        var sql = $@"
+UPDATE ""{_table}"" SET
+    ""Name"" = @Name,
+    ""Label"" = @Label,
+    ""Category"" = @Category,
+    ""SavePath"" = @SavePath,
+    ""SourcePath"" = @SourcePath,
+    ""TagIds"" = @TagIds,
+    ""DownloadClientId"" = @DownloadClientId,
+    ""Priority"" = @Priority,
+    ""UploadLimit"" = @UploadLimit,
+    ""DownloadLimit"" = @DownloadLimit,
+    ""SuperSeeding"" = @SuperSeeding,
+    ""ForceStart"" = @ForceStart,
+    ""SequentialDownload"" = @SequentialDownload,
+    ""FirstLastPiecePrio"" = @FirstLastPiecePrio,
+    ""SmallTorrentLimit"" = @SmallTorrentLimit,
+    ""Threshold"" = @Threshold,
+    ""RatioLimit"" = @RatioLimit,
+    ""SeedingTimeLimit"" = @SeedingTimeLimit,
+    ""TrackerUrl"" = @TrackerUrl,
+    ""ForceCompleted"" = @ForceCompleted,
+    ""Progress"" = @Progress,
+    ""Availability"" = @Availability
+WHERE ""Id"" = @Id";
+
+        ExecuteWithRetry(connection => connection.Execute(sql, torrent));
+    }
+
+    private int ExecuteInTransaction<T>(string sql, IList<T> rows)
+    {
+        var affected = 0;
+        ExecuteWithRetry(connection =>
+        {
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                affected = connection.Execute(sql, rows, transaction);
+                transaction.Commit();
+            }
+            catch
+            {
+                try
+                {
+                    transaction.Rollback();
+                }
+                catch
+                {
+                    // best-effort rollback
+                }
+
+                throw;
+            }
+        });
+
+        return affected;
+    }
+
+    private static List<T> OrderById<T>(IEnumerable<T> rows)
+        where T : class
+    {
+        if (rows == null)
+        {
+            return new List<T>();
+        }
+
+        return rows
+            .Where(row => row != null && IdOf(row) > 0)
+            .OrderBy(IdOf)
+            .ToList();
+    }
+
+    private static int IdOf<T>(T row)
+    {
+        return row switch
+        {
+            TorrentRuntimeWrite runtime => runtime.Id,
+            TorrentStatusTransition transition => transition.Id,
+            TorrentExecutionWrite execution => execution.Id,
+            _ => 0
+        };
+    }
+
+    internal readonly struct ActivityClear : IEquatable<ActivityClear>
+    {
+        public ActivityClear(int id)
+        {
+            Id = id;
+            Active = false;
+        }
+
+        public int Id { get; }
+
+        public bool Active { get; }
+
+        public bool Equals(ActivityClear other)
+        {
+            return Id == other.Id && Active == other.Active;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is ActivityClear other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Id, Active);
+        }
+
+        public static bool operator ==(ActivityClear left, ActivityClear right)
+        {
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(ActivityClear left, ActivityClear right)
+        {
+            return !left.Equals(right);
+        }
+    }
+
+    internal readonly struct SortWrite : IEquatable<SortWrite>
+    {
+        public SortWrite(int id, int sortOrder)
+        {
+            Id = id;
+            SortOrder = sortOrder;
+        }
+
+        public int Id { get; }
+
+        public int SortOrder { get; }
+
+        public bool Equals(SortWrite other)
+        {
+            return Id == other.Id && SortOrder == other.SortOrder;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is SortWrite other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Id, SortOrder);
+        }
+
+        public static bool operator ==(SortWrite left, SortWrite right)
+        {
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(SortWrite left, SortWrite right)
+        {
+            return !left.Equals(right);
+        }
+    }
 }

@@ -1012,7 +1012,7 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.MoveQueue(999, "top");
 
             _repository.DidNotReceive().Update(Arg.Any<Torrent>());
-            _repository.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<Torrent>>());
+            _repository.DidNotReceive().UpdateSortOrders(Arg.Any<IEnumerable<Torrent>>());
         }
 
         [Test]
@@ -1031,7 +1031,7 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(torrents[2].SortOrder, Is.EqualTo(0));
             Assert.That(torrents[0].SortOrder, Is.EqualTo(1));
             Assert.That(torrents[1].SortOrder, Is.EqualTo(2));
-            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+            _repository.Received(1).UpdateSortOrders(Arg.Is<IEnumerable<Torrent>>(items =>
                 items.Count() == 3 &&
                 items.Any(t => t.Id == 3 && t.SortOrder == 0) &&
                 items.Any(t => t.Id == 1 && t.SortOrder == 1) &&
@@ -1055,7 +1055,7 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(torrents[1].SortOrder, Is.EqualTo(0));
             Assert.That(torrents[0].SortOrder, Is.EqualTo(1));
             Assert.That(torrents[2].SortOrder, Is.EqualTo(2));
-            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+            _repository.Received(1).UpdateSortOrders(Arg.Is<IEnumerable<Torrent>>(items =>
                 items.Count() == 2 &&
                 items.Any(t => t.Id == 2 && t.SortOrder == 0) &&
                 items.Any(t => t.Id == 1 && t.SortOrder == 1) &&
@@ -1079,7 +1079,7 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(torrents[1].SortOrder, Is.EqualTo(2));
             Assert.That(torrents[0].SortOrder, Is.EqualTo(0));
             Assert.That(torrents[2].SortOrder, Is.EqualTo(1));
-            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+            _repository.Received(1).UpdateSortOrders(Arg.Is<IEnumerable<Torrent>>(items =>
                 items.Count() == 2 &&
                 items.Any(t => t.Id == 2 && t.SortOrder == 2) &&
                 items.Any(t => t.Id == 3 && t.SortOrder == 1) &&
@@ -1103,7 +1103,7 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(torrents[0].SortOrder, Is.EqualTo(2));
             Assert.That(torrents[1].SortOrder, Is.EqualTo(0));
             Assert.That(torrents[2].SortOrder, Is.EqualTo(1));
-            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+            _repository.Received(1).UpdateSortOrders(Arg.Is<IEnumerable<Torrent>>(items =>
                 items.Count() == 3 &&
                 items.Any(t => t.Id == 1 && t.SortOrder == 2) &&
                 items.Any(t => t.Id == 2 && t.SortOrder == 0) &&
@@ -1124,7 +1124,7 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.MoveQueue(1, "invalid");
 
             _repository.DidNotReceive().Update(Arg.Any<Torrent>());
-            _repository.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<Torrent>>());
+            _repository.DidNotReceive().UpdateSortOrders(Arg.Any<IEnumerable<Torrent>>());
         }
 
         [Test]
@@ -1144,7 +1144,7 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(torrents.First(t => t.Id == 10).SortOrder, Is.EqualTo(1));
             Assert.That(torrents.First(t => t.Id == 20).SortOrder, Is.EqualTo(2));
 
-            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+            _repository.Received(1).UpdateSortOrders(Arg.Is<IEnumerable<Torrent>>(items =>
                 items.Count() == 3 &&
                 items.Any(t => t.Id == 30 && t.SortOrder == 0) &&
                 items.Any(t => t.Id == 10 && t.SortOrder == 1) &&
@@ -1169,7 +1169,7 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(torrents.First(t => t.Id == 30).SortOrder, Is.EqualTo(1));
             Assert.That(torrents.First(t => t.Id == 10).SortOrder, Is.EqualTo(2));
 
-            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+            _repository.Received(1).UpdateSortOrders(Arg.Is<IEnumerable<Torrent>>(items =>
                 items.Count() == 3 &&
                 items.Any(t => t.Id == 20 && t.SortOrder == 0) &&
                 items.Any(t => t.Id == 30 && t.SortOrder == 1) &&
@@ -1197,7 +1197,7 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(torrents[3].SortOrder, Is.EqualTo(3));
             Assert.That(torrents[4].SortOrder, Is.EqualTo(4));
 
-            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+            _repository.Received(1).UpdateSortOrders(Arg.Is<IEnumerable<Torrent>>(items =>
                 items.Count() == 3 &&
                 items.Any(t => t.Id == 2 && t.SortOrder == 0) &&
                 items.Any(t => t.Id == 3 && t.SortOrder == 1) &&
@@ -1227,7 +1227,7 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(torrents[2].SortOrder, Is.EqualTo(3));
             Assert.That(torrents[3].SortOrder, Is.EqualTo(4));
 
-            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+            _repository.Received(1).UpdateSortOrders(Arg.Is<IEnumerable<Torrent>>(items =>
                 items.Count() == 3 &&
                 items.Any(t => t.Id == 5 && t.SortOrder == 2) &&
                 items.Any(t => t.Id == 3 && t.SortOrder == 3) &&
@@ -1257,7 +1257,7 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(torrents[1].SortOrder, Is.EqualTo(3));
             Assert.That(torrents[4].SortOrder, Is.EqualTo(4));
 
-            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+            _repository.Received(1).UpdateSortOrders(Arg.Is<IEnumerable<Torrent>>(items =>
                 items.Count() == 3 &&
                 items.Any(t => t.Id == 3 && t.SortOrder == 1) &&
                 items.Any(t => t.Id == 4 && t.SortOrder == 2) &&
@@ -1287,7 +1287,7 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(torrents[2].SortOrder, Is.EqualTo(3));
             Assert.That(torrents[4].SortOrder, Is.EqualTo(4));
 
-            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+            _repository.Received(1).UpdateSortOrders(Arg.Is<IEnumerable<Torrent>>(items =>
                 items.Count() == 3 &&
                 items.Any(t => t.Id == 4 && t.SortOrder == 1) &&
                 items.Any(t => t.Id == 2 && t.SortOrder == 2) &&
@@ -1311,7 +1311,7 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.BatchMoveQueue(new[] { 1 }, "invalid");
             _subject.BatchMoveQueue(new List<int>(), "top");
 
-            _repository.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<Torrent>>());
+            _repository.DidNotReceive().UpdateSortOrders(Arg.Any<IEnumerable<Torrent>>());
         }
 
         [Test]
@@ -1343,7 +1343,7 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(result.Priority, Is.EqualTo(5));
             Assert.That(result.Uploaded, Is.EqualTo(5000));
             Assert.That(result.Downloaded, Is.EqualTo(10000));
-            _repository.Received(1).Update(existing);
+            _repository.Received(1).UpdateUserColumns(existing);
         }
 
         [Test]
@@ -1354,7 +1354,7 @@ namespace NzbDrone.Core.Test.Torrents
             var result = _subject.UpdateUserFields(99, new Torrent { Name = "Updated" });
 
             Assert.That(result, Is.Null);
-            _repository.DidNotReceive().Update(Arg.Any<Torrent>());
+            _repository.DidNotReceive().UpdateUserColumns(Arg.Any<Torrent>());
         }
 
         [Test]
@@ -1448,7 +1448,10 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(stopped.IsVpnPaused, Is.False);
             Assert.That(alreadyVpnPaused.IsVpnPaused, Is.True);
 
-            _repository.Received(1).UpdateMany(Arg.Is<IList<Torrent>>(list => list.Count == 2 && list.Contains(downloading) && list.Contains(seeding)));
+            _repository.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+                writes.Count() == 2 &&
+                writes.Any(w => w.Id == downloading.Id && w.Status == (int)TorrentStatus.Paused && w.SetIsVpnPaused == 1 && w.IsVpnPaused) &&
+                writes.Any(w => w.Id == seeding.Id && w.Status == (int)TorrentStatus.Paused && w.SetIsVpnPaused == 1 && w.IsVpnPaused)));
             _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e => e.Torrent == downloading && e.OldStatus == TorrentStatus.Downloading && e.NewStatus == TorrentStatus.Paused));
             _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e => e.Torrent == seeding && e.OldStatus == TorrentStatus.Seeding && e.NewStatus == TorrentStatus.Paused));
             _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == downloading));
@@ -1472,7 +1475,10 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(vpnPaused2.Status, Is.EqualTo(TorrentStatus.Seeding));
             Assert.That(normalTorrent.IsVpnPaused, Is.False);
 
-            _repository.Received(1).UpdateMany(Arg.Is<IList<Torrent>>(list => list.Count == 2 && list.Contains(vpnPaused1) && list.Contains(vpnPaused2)));
+            _repository.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+                writes.Count() == 2 &&
+                writes.Any(w => w.Id == vpnPaused1.Id && w.Status == (int)TorrentStatus.Downloading && w.SetIsVpnPaused == 1 && !w.IsVpnPaused) &&
+                writes.Any(w => w.Id == vpnPaused2.Id && w.Status == (int)TorrentStatus.Seeding && w.SetIsVpnPaused == 1 && !w.IsVpnPaused)));
             _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e => e.Torrent == vpnPaused1 && e.OldStatus == TorrentStatus.Paused && e.NewStatus == TorrentStatus.Downloading));
             _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e => e.Torrent == vpnPaused2 && e.OldStatus == TorrentStatus.Paused && e.NewStatus == TorrentStatus.Seeding));
             _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == vpnPaused1));
@@ -1520,7 +1526,8 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(seedingOnVolume.Status, Is.EqualTo(TorrentStatus.Seeding));
             Assert.That(downloadingOnOther.Status, Is.EqualTo(TorrentStatus.Downloading));
 
-            _repository.Received(1).UpdateMany(Arg.Is<IList<Torrent>>(list => list.Count == 1 && list.Contains(downloadingOnVolume)));
+            _repository.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+                writes.Count() == 1 && writes.Single().Id == downloadingOnVolume.Id && writes.Single().Status == (int)TorrentStatus.Paused && !writes.Single().Active));
             _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == downloadingOnVolume));
         }
 
@@ -1569,7 +1576,8 @@ namespace NzbDrone.Core.Test.Torrents
 
             Assert.That(autoPausedOtherVolume.Status, Is.EqualTo(TorrentStatus.Paused));
 
-            _repository.Received(1).UpdateMany(Arg.Is<IList<Torrent>>(list => list.Count == 1 && list.Contains(autoPaused)));
+            _repository.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+                writes.Count() == 1 && writes.Single().Id == autoPaused.Id && writes.Single().Status == (int)autoPaused.Status));
             _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == autoPaused));
         }
 
@@ -1608,7 +1616,7 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(autoPaused.Status, Is.EqualTo(TorrentStatus.Paused));
             Assert.That(autoPaused.ErrorMessage, Is.EqualTo("Paused: Emergency low disk space on volume /mnt/downloads"));
 
-            _repository.DidNotReceive().UpdateMany(Arg.Any<IList<Torrent>>());
+            _repository.DidNotReceive().UpdateExecutionStates(Arg.Any<IEnumerable<TorrentExecutionWrite>>());
             _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentUpdatedEvent>());
         }
 
@@ -1647,7 +1655,8 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(autoPaused.Status, Is.EqualTo(TorrentStatus.Downloading));
             Assert.That(autoPaused.ErrorMessage, Is.Null);
 
-            _repository.Received(1).UpdateMany(Arg.Is<IList<Torrent>>(list => list.Count == 1 && list.Contains(autoPaused)));
+            _repository.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+                writes.Count() == 1 && writes.Single().Id == autoPaused.Id && writes.Single().Status == (int)autoPaused.Status));
             _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == autoPaused));
         }
 
@@ -1793,6 +1802,123 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.Add(torrent);
 
             diskAllocationService.Received(1).PreallocateFiles(torrent, files);
+        }
+
+        [Test]
+        public void Narrow_service_writes_delegate_to_the_repository()
+        {
+            var runtime = new[] { new TorrentRuntimeWrite { Id = 1, ExpectedStatus = (int)TorrentStatus.Seeding, Uploaded = 5 } };
+            var transitions = new[] { new TorrentStatusTransition { Id = 1, ExpectedStatus = (int)TorrentStatus.Seeding, Status = (int)TorrentStatus.Paused } };
+            var execution = new[] { new TorrentExecutionWrite { Id = 1, Status = (int)TorrentStatus.Paused } };
+            _repository.UpdateRuntimeStats(runtime).Returns(1);
+            _repository.TryTransitionStatuses(transitions).Returns(1);
+
+            Assert.That(_subject.UpdateRuntimeStats(runtime), Is.EqualTo(1));
+            Assert.That(_subject.TryTransitionStatuses(transitions), Is.EqualTo(1));
+            _subject.ClearActivity(new[] { 1 });
+            _subject.UpdateExecutionStates(execution);
+            _subject.UpdateExecutionStates(null);
+            _subject.UpdateExecutionStates(Array.Empty<TorrentExecutionWrite>());
+            _subject.UpdateSuperSeeding(1, false);
+            _subject.UpdateMany(null);
+
+            _repository.Received(1).UpdateRuntimeStats(runtime);
+            _repository.Received(1).TryTransitionStatuses(transitions);
+            _repository.Received(1).ClearActivity(Arg.Is<IEnumerable<int>>(ids => ids.Contains(1)));
+            _repository.Received(1).UpdateExecutionStates(execution);
+            _repository.Received(1).UpdateSuperSeeding(1, false);
+            _repository.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<Torrent>>());
+        }
+
+        [Test]
+        public void UpdateSwarmStats_publishes_the_current_row()
+        {
+            var torrent = new Torrent { Id = 6, Name = "Swarm", Seeders = 4, Leechers = 2 };
+            _repository.Get(6).Returns(torrent);
+
+            _subject.UpdateSwarmStats(6, 4, 2, null);
+
+            _repository.Received(1).UpdateSwarmStats(6, 4, 2, null);
+            _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == torrent));
+        }
+
+        [Test]
+        public void UpdateUserFields_persists_a_status_change_without_rewriting_counters()
+        {
+            var existing = new Torrent
+            {
+                Id = 7,
+                Name = "Live",
+                Status = TorrentStatus.Seeding,
+                Uploaded = 80,
+                Downloaded = 40,
+                Active = true
+            };
+            _repository.Get(7).Returns(existing);
+
+            var result = _subject.UpdateUserFields(7, new Torrent { Name = "Live", Status = TorrentStatus.Paused });
+
+            Assert.That(result.Status, Is.EqualTo(TorrentStatus.Paused));
+            Assert.That(result.Uploaded, Is.EqualTo(80));
+            _repository.Received(1).UpdateUserColumns(existing);
+            _repository.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+                writes.Single().Id == 7 && writes.Single().Status == (int)TorrentStatus.Paused));
+        }
+
+        [Test]
+        public void Update_persists_lower_downloaded_from_fast_resume_and_client_reconcile()
+        {
+            var stored = new Torrent
+            {
+                Id = 8,
+                Name = "Verified",
+                Uploaded = 5000,
+                Downloaded = 4000,
+                TotalSize = 4000,
+                PieceLength = 1000,
+                Status = TorrentStatus.Seeding
+            };
+            var verifiedPieces = new[] { true, false, false, false };
+            var verifiedBytes = TorrentPieceCalculator.SumVerifiedBytes(verifiedPieces, stored.TotalSize, stored.PieceLength);
+            Assert.That(verifiedBytes, Is.LessThan(stored.Downloaded));
+
+            var fastResume = new Torrent
+            {
+                Id = stored.Id,
+                Name = stored.Name,
+                Uploaded = stored.Uploaded,
+                Downloaded = verifiedBytes,
+                TotalSize = stored.TotalSize,
+                PieceLength = stored.PieceLength,
+                Progress = 0.25,
+                Status = TorrentStatus.Downloading
+            };
+            _repository.Get(stored.Id).Returns(stored);
+            _repository.Update(Arg.Any<Torrent>()).Returns(call => call.Arg<Torrent>());
+
+            var resumed = _subject.Update(fastResume);
+
+            Assert.That(resumed.Downloaded, Is.EqualTo(verifiedBytes));
+            _repository.Received(1).Update(Arg.Is<Torrent>(t => t.Id == stored.Id && t.Downloaded == verifiedBytes));
+
+            var reconciledDownloaded = Math.Max(0L, 10000L - 7000L);
+            var reconcile = new Torrent
+            {
+                Id = 9,
+                Name = "Client",
+                Uploaded = 100,
+                Downloaded = reconciledDownloaded,
+                TotalSize = 10000,
+                Progress = 0.3,
+                Status = TorrentStatus.Downloading
+            };
+            _repository.Get(9).Returns(new Torrent { Id = 9, Name = "Client", Downloaded = 9000, TotalSize = 10000, Uploaded = 100 });
+            _repository.UpdateMany(Arg.Any<IEnumerable<Torrent>>());
+
+            _subject.UpdateMany(new[] { reconcile });
+
+            Assert.That(reconcile.Downloaded, Is.EqualTo(3000));
+            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items => items.Single().Id == 9 && items.Single().Downloaded == 3000));
         }
     }
 }

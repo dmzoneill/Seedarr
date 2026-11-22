@@ -394,7 +394,7 @@ public class SuperSeedingService : ISuperSeedingService
 
         try
         {
-            _torrentService?.Update(torrent);
+            _torrentService?.UpdateSuperSeeding(torrent.Id, false);
         }
         catch (Exception ex)
         {

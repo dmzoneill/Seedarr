@@ -347,7 +347,7 @@ public class SuperSeedingServiceTest
 
         // Verify SuperSeeding mode exited
         Assert.That(torrent.SuperSeeding, Is.False);
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 42 && !t.SuperSeeding));
+        _torrentService.Received(1).UpdateSuperSeeding(42, false);
         _eventLogService.Received(1).Info(42, "SuperSeeding", Arg.Is<string>(s => s.Contains("secondary seed joined")));
         _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 42 && e.Reason == "secondary seed joined"));
         _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent.Id == 42 && !e.Torrent.SuperSeeding));
@@ -387,7 +387,7 @@ public class SuperSeedingServiceTest
         _service.OnPeerBitfield(server1, torrent, fullBitfield);
 
         Assert.That(torrent.SuperSeeding, Is.False);
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 43 && !t.SuperSeeding));
+        _torrentService.Received(1).UpdateSuperSeeding(43, false);
         _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 43 && e.Reason == "secondary seed joined"));
 
         // Connected peer without fast extension receives full bitfield
@@ -434,7 +434,7 @@ public class SuperSeedingServiceTest
         _service.OnPeerBitfield(server2, torrent, server2.PeerPieces);
 
         Assert.That(torrent.SuperSeeding, Is.False);
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 44 && !t.SuperSeeding));
+        _torrentService.Received(1).UpdateSuperSeeding(44, false);
         _eventLogService.Received(1).Info(44, "SuperSeeding", Arg.Is<string>(s => s.Contains("swarm availability >= 1.0")));
         _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 44 && e.Reason == "swarm availability >= 1.0"));
 

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Messaging.Events;
@@ -34,7 +35,8 @@ public class SeedingServiceTest
         Assert.That(torrent.Active, Is.True);
         Assert.That(torrent.ForceStart, Is.True);
         Assert.That(torrent.LastActive, Is.Not.Null);
-        _torrentService.Received(1).Update(torrent);
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+            writes.Single().Id == torrent.Id && writes.Single().Status == (int)torrent.Status && writes.Single().SetForceStart == 1 && writes.Single().ForceStart == torrent.ForceStart));
     }
 
     [Test]
@@ -49,7 +51,8 @@ public class SeedingServiceTest
         Assert.That(torrent.Active, Is.True);
         Assert.That(torrent.ForceStart, Is.True);
         Assert.That(torrent.LastActive, Is.Not.Null);
-        _torrentService.Received(1).Update(torrent);
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+            writes.Single().Id == torrent.Id && writes.Single().Status == (int)torrent.Status && writes.Single().SetForceStart == 1 && writes.Single().ForceStart == torrent.ForceStart));
     }
 
     [Test]
@@ -64,7 +67,8 @@ public class SeedingServiceTest
         Assert.That(torrent.Active, Is.True);
         Assert.That(torrent.ForceStart, Is.True);
         Assert.That(torrent.LastActive, Is.Not.Null);
-        _torrentService.Received(1).Update(torrent);
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+            writes.Single().Id == torrent.Id && writes.Single().Status == (int)torrent.Status && writes.Single().SetForceStart == 1 && writes.Single().ForceStart == torrent.ForceStart));
     }
 
     [Test]
@@ -86,7 +90,7 @@ public class SeedingServiceTest
         var result = _service.Start(99);
 
         Assert.That(result, Is.False);
-        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+        _torrentService.DidNotReceive().UpdateExecutionStates(Arg.Any<IEnumerable<TorrentExecutionWrite>>());
         _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<SeedingStartedEvent>());
     }
 
@@ -112,7 +116,8 @@ public class SeedingServiceTest
         Assert.That(torrent.ForceStart, Is.False);
         Assert.That(torrent.UploadSpeed, Is.EqualTo(0));
         Assert.That(torrent.DownloadSpeed, Is.EqualTo(0));
-        _torrentService.Received(1).Update(torrent);
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+            writes.Single().Id == torrent.Id && writes.Single().Status == (int)torrent.Status && writes.Single().SetForceStart == 1 && writes.Single().ForceStart == torrent.ForceStart));
     }
 
     [Test]
@@ -137,7 +142,8 @@ public class SeedingServiceTest
         Assert.That(torrent.ForceStart, Is.False);
         Assert.That(torrent.UploadSpeed, Is.EqualTo(0));
         Assert.That(torrent.DownloadSpeed, Is.EqualTo(0));
-        _torrentService.Received(1).Update(torrent);
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+            writes.Single().Id == torrent.Id && writes.Single().Status == (int)torrent.Status && writes.Single().SetForceStart == 1 && writes.Single().ForceStart == torrent.ForceStart));
     }
 
     [Test]
@@ -158,7 +164,7 @@ public class SeedingServiceTest
 
         Assert.That(_service.Stop(99), Is.False);
 
-        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+        _torrentService.DidNotReceive().UpdateExecutionStates(Arg.Any<IEnumerable<TorrentExecutionWrite>>());
         _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<SeedingStoppedEvent>());
     }
 
@@ -178,7 +184,7 @@ public class SeedingServiceTest
         Assert.That(_service.Stop(1), Is.True);
 
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
-        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+        _torrentService.DidNotReceive().UpdateExecutionStates(Arg.Any<IEnumerable<TorrentExecutionWrite>>());
         _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<SeedingStoppedEvent>());
     }
 
@@ -231,14 +237,14 @@ public class SeedingServiceTest
         Assert.That(pausedIncomplete.ForceStart, Is.True);
         Assert.That(pausedIncomplete.LastActive, Is.Not.Null);
 
-        _torrentService.Received(1).Update(stoppedComplete);
-        _torrentService.Received(1).Update(stoppedIncomplete);
-        _torrentService.Received(1).Update(queued);
-        _torrentService.Received(1).Update(pausedComplete);
-        _torrentService.Received(1).Update(pausedIncomplete);
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes => writes.Single().Id == stoppedComplete.Id && writes.Single().Status == (int)TorrentStatus.Seeding));
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes => writes.Single().Id == stoppedIncomplete.Id && writes.Single().Status == (int)TorrentStatus.Downloading));
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes => writes.Single().Id == queued.Id));
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes => writes.Single().Id == pausedComplete.Id && writes.Single().Status == (int)TorrentStatus.Seeding));
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes => writes.Single().Id == pausedIncomplete.Id && writes.Single().Status == (int)TorrentStatus.Downloading));
 
-        _torrentService.DidNotReceive().Update(seeding);
-        _torrentService.DidNotReceive().Update(downloading);
+        _torrentService.DidNotReceive().UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes => writes.Any(w => w.Id == seeding.Id)));
+        _torrentService.DidNotReceive().UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes => writes.Any(w => w.Id == downloading.Id)));
     }
 
     [Test]
@@ -296,10 +302,10 @@ public class SeedingServiceTest
         Assert.That(downloading.UploadSpeed, Is.EqualTo(0));
         Assert.That(downloading.DownloadSpeed, Is.EqualTo(0));
 
-        _torrentService.Received(1).Update(seeding);
-        _torrentService.Received(1).Update(downloading);
-        _torrentService.DidNotReceive().Update(stopped);
-        _torrentService.DidNotReceive().Update(paused);
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes => writes.Single().Id == seeding.Id && writes.Single().Status == (int)TorrentStatus.Stopped && !writes.Single().ForceStart));
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes => writes.Single().Id == downloading.Id && writes.Single().Status == (int)TorrentStatus.Stopped));
+        _torrentService.DidNotReceive().UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes => writes.Any(w => w.Id == stopped.Id)));
+        _torrentService.DidNotReceive().UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes => writes.Any(w => w.Id == paused.Id)));
     }
 
     [Test]

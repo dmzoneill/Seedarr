@@ -227,7 +227,7 @@ public class TrackerScrapeService : ITrackerScrapeService
 
             try
             {
-                _torrentService.Update(torrent);
+                _torrentService.UpdateSwarmStats(torrent.Id, torrent.Seeders, torrent.Leechers, torrent.Availability);
             }
             catch (Exception ex)
             {
