@@ -1808,4 +1808,53 @@ public class TrackerAnnounceServiceTest
                 tiers[0][0] == "mock://tier0-t2.org/announce" &&
                 tiers[0][1] == "mock://tier0-t1.org/announce"));
     }
+
+    [Test]
+    public void Announce_sends_started_again_after_stopped_even_when_the_entry_has_history()
+    {
+        var torrent = new Torrent
+        {
+            Id = 7,
+            Name = "Resume",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Uploaded = 100,
+            Downloaded = 100,
+            TotalSize = 100,
+            Status = TorrentStatus.Seeding
+        };
+        var entry = new TrackerEntry
+        {
+            Id = 3,
+            TorrentId = 7,
+            Url = "http://127.0.0.1:6969/announce",
+            Enabled = true,
+            TotalAnnounces = 4,
+            SuccessfulAnnounces = 4,
+            LastAnnounce = DateTime.UtcNow.AddHours(-2),
+            NextAnnounce = DateTime.UtcNow.AddMinutes(-1),
+            AnnounceInterval = 1800,
+            MinAnnounceInterval = 60
+        };
+        _trackerEntryService.GetByTorrentId(7).Returns(new List<TrackerEntry> { entry });
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true, Complete = 1, Incomplete = 0, Interval = 1800, MinInterval = 60 });
+
+        _service.AnnounceTorrent(torrent, force: true);
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(request => request.Event == AnnounceEvent.Started),
+            Arg.Any<List<List<string>>>());
+
+        _multiTracker.ClearReceivedCalls();
+        _service.AnnounceTorrent(torrent, force: true);
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(request => request.Event == AnnounceEvent.None),
+            Arg.Any<List<List<string>>>());
+
+        _service.AnnounceTorrent(torrent, force: true, eventType: AnnounceEvent.Stopped);
+        _multiTracker.ClearReceivedCalls();
+        _service.AnnounceTorrent(torrent, force: true);
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(request => request.Event == AnnounceEvent.Started),
+            Arg.Any<List<List<string>>>());
+    }
 }

@@ -75,6 +75,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     private readonly ConcurrentDictionary<int, bool> _completedTorrents = new();
     private readonly ConcurrentDictionary<string, (string PeerId, string AnnounceKey)> _ephemeralIdentities = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<int, List<List<string>>> _torrentTierOrder = new();
+    private readonly ConcurrentDictionary<string, byte> _sessionStarted = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<Torrent> _staggeredQueue = new();
     private readonly object _staggeredLock = new();
     private readonly Logger _logger;
@@ -200,6 +201,46 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         return false;
     }
 
+    private static string SessionStartKey(int torrentId, string url)
+    {
+        return torrentId.ToString(CultureInfo.InvariantCulture) + "\n" + (url ?? string.Empty).Trim();
+    }
+
+    private bool NeedsSessionStart(TrackerEntry entry)
+    {
+        if (entry == null)
+        {
+            return false;
+        }
+
+        if (entry.TotalAnnounces == 0 || !entry.LastAnnounce.HasValue)
+        {
+            return true;
+        }
+
+        return !_sessionStarted.ContainsKey(SessionStartKey(entry.TorrentId, entry.Url));
+    }
+
+    private void RememberSessionStart(TrackerEntry entry)
+    {
+        if (entry == null || string.IsNullOrWhiteSpace(entry.Url))
+        {
+            return;
+        }
+
+        _sessionStarted[SessionStartKey(entry.TorrentId, entry.Url)] = 0;
+    }
+
+    private void ForgetSessionStart(TrackerEntry entry)
+    {
+        if (entry == null || string.IsNullOrWhiteSpace(entry.Url))
+        {
+            return;
+        }
+
+        _sessionStarted.TryRemove(SessionStartKey(entry.TorrentId, entry.Url), out _);
+    }
+
     public List<TrackerAnnounceResult> AnnounceTorrent(Torrent torrent, bool force = false, AnnounceEvent eventType = AnnounceEvent.None)
     {
         return AnnounceTorrentAsync(torrent, force, eventType).GetAwaiter().GetResult();
@@ -320,7 +361,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             .ToList();
 
         var isStopped = torrent.Status == TorrentStatus.Stopped || torrent.Status == TorrentStatus.Paused || eventType == AnnounceEvent.Stopped;
-        var isFirstAnnounceOverall = candidateTrackers.All(t => t.TotalAnnounces == 0 || !t.LastAnnounce.HasValue);
+        var isFirstAnnounceOverall = candidateTrackers.Any(NeedsSessionStart);
 
         AnnounceEvent announceEvent;
         if (eventType != AnnounceEvent.None)
@@ -427,6 +468,14 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 torrent.Id,
                 "Tracker",
                 $"Announcing to tracker: {entry.Url} (event: {eventName}, uploaded: {uploadedBytes:N0} bytes, left: {left:N0} bytes)");
+        }
+
+        if (announceEvent == AnnounceEvent.Stopped)
+        {
+            foreach (var candidate in candidateTrackers)
+            {
+                ForgetSessionStart(candidate);
+            }
         }
 
         TrackerAnnounceResponse response;
@@ -561,6 +610,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 entry.ConsecutiveFailures = 0;
                 entry.ErrorMessage = null;
                 entry.WarningMessage = null;
+                if (announceEvent == AnnounceEvent.Started)
+                {
+                    RememberSessionStart(entry);
+                }
+
                 _trackerEntryService.Update(entry);
 
                 var allEntries = _trackerEntryService?.GetByTorrentId(torrent.Id);
@@ -785,7 +839,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         {
             announceEvent = AnnounceEvent.Stopped;
         }
-        else if (isFirstAnnounce)
+        else if (isFirstAnnounce || NeedsSessionStart(entry))
         {
             announceEvent = AnnounceEvent.Started;
         }
@@ -856,6 +910,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         entry.Status = TrackerStatus.Announcing;
         _trackerEntryService.Update(entry);
         _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, previousStatus, TrackerStatus.Announcing));
+
+        if (announceEvent == AnnounceEvent.Stopped)
+        {
+            ForgetSessionStart(entry);
+        }
 
         TrackerAnnounceResponse response;
         var sw = Stopwatch.StartNew();
@@ -959,6 +1018,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             entry.ConsecutiveFailures = 0;
             entry.ErrorMessage = null;
             entry.WarningMessage = null;
+            if (announceEvent == AnnounceEvent.Started)
+            {
+                RememberSessionStart(entry);
+            }
+
             _trackerEntryService.Update(entry);
             var allEntries = _trackerEntryService?.GetByTorrentId(torrent.Id);
             if (allEntries != null && allEntries.Count > 0)
