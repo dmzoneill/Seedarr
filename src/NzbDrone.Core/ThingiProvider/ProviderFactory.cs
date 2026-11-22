@@ -51,16 +51,21 @@ public abstract class ProviderFactory<TProvider, TProviderDefinition> : IProvide
         _providerRepository.Delete(id);
     }
 
-    public List<TProvider> GetAvailableProviders()
+    public virtual List<TProvider> GetAvailableProviders()
     {
         var enabledImplementations = All()
             .Where(d => d.Enable)
             .Select(d => d.Implementation)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        return _serviceFactory.BuildAll<TProvider>()
+        return BuildAllProviders()
             .Where(p => enabledImplementations.Contains(p.GetType().Name) || enabledImplementations.Contains(p.Name))
             .ToList();
+    }
+
+    protected List<TProvider> BuildAllProviders()
+    {
+        return _serviceFactory.BuildAll<TProvider>()?.Where(p => p != null).ToList() ?? new List<TProvider>();
     }
 
     public virtual List<TProviderDefinition> GetDefaultDefinitions()
