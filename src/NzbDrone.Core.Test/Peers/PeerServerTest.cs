@@ -867,6 +867,51 @@ public class PeerServerTest
         _mseSkeyRegistry.Received(1).TryMatchTorrent(skeyHash, out Arg.Any<Torrent>());
     }
 
+    [Test]
+    public void ValidateInfoHash_unknown_skey_does_not_scan_every_torrent()
+    {
+        var scans = 0;
+        _torrentService.GetAll().Returns(_ =>
+        {
+            scans++;
+            return Enumerable.Range(0, 50).Select(i => new Torrent { InfoHash = i.ToString("x40") }).ToList();
+        });
+
+        var skeyHash = new byte[20];
+        _mseSkeyRegistry.TryMatchTorrent(skeyHash, out Arg.Any<Torrent>()).Returns(false);
+
+        var result = InvokeValidateInfoHash(skeyHash);
+
+        Assert.That(result, Is.False);
+        Assert.That(scans, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void GetCachedTorrent_miss_does_not_scan_every_torrent_and_is_negative_cached()
+    {
+        var scans = 0;
+        _torrentService.GetAll().Returns(_ =>
+        {
+            scans++;
+            return new List<Torrent>();
+        });
+        _torrentService.GetByInfoHash("missing").Returns((Torrent)null);
+
+        Assert.That(InvokeGetCachedTorrent("missing"), Is.Null);
+        Assert.That(InvokeGetCachedTorrent("missing"), Is.Null);
+
+        Assert.That(scans, Is.EqualTo(0));
+        _torrentService.Received(1).GetByInfoHash("missing");
+    }
+
+    private Torrent InvokeGetCachedTorrent(string infoHash)
+    {
+        var method = typeof(PeerServer).GetMethod(
+            "GetCachedTorrent",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        return (Torrent)method.Invoke(_server, new object[] { infoHash });
+    }
+
     // HandleMessage idle chance tests
 
     [Test]
@@ -1064,6 +1109,7 @@ public class PeerServerTest
             Name = "Test"
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentService.GetByInfoHash(infoHash).Returns(torrent);
 
         _connectionManager.TryReserveSlot(infoHash, true, out Arg.Any<IConnectionReservation>())
             .Returns(x =>
@@ -1102,6 +1148,7 @@ public class PeerServerTest
             Name = "Test"
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentService.GetByInfoHash(infoHash).Returns(torrent);
 
         var handshake = BuildBtHandshake(infoHash, "-SD0001-012345678901");
         var stream = clientTcp.GetStream();
