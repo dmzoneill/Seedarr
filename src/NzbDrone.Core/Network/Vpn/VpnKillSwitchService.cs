@@ -155,44 +155,40 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
             return false;
         }
 
-        lock (_stateLock)
-        {
-            var enabled = _configService.EnableVpnKillSwitch;
-            var iface = _configService.BindInterface?.Trim();
+        var enabled = _configService.EnableVpnKillSwitch;
+        var iface = _configService.BindInterface?.Trim();
 
-            if (!enabled || string.IsNullOrWhiteSpace(iface) ||
-                string.Equals(iface, "Any", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(iface, "all", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(iface, "0.0.0.0", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(iface, "::", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(iface, "*", StringComparison.OrdinalIgnoreCase))
+        if (!IsKillSwitchArmed(enabled, iface))
+        {
+            Action notify = null;
+            lock (_stateLock)
             {
                 if (_isFailClosedActive)
                 {
                     _isFailClosedActive = false;
                     _interfaceUpSince = null;
                     _logger.Info("VPN Kill switch disabled or binding unconfigured. Disengaging fail-closed state.");
-
-                    try
-                    {
-                        VpnRestored?.Invoke(iface);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error in VpnRestored subscriber callback");
-                    }
-
-                    _eventAggregator?.PublishEvent(new VpnInterfaceRestoredEvent(iface ?? string.Empty));
-                    _eventAggregator?.PublishEvent(new VpnRestoredEvent(iface ?? string.Empty));
+                    var restored = iface ?? string.Empty;
+                    notify = () => RaiseRestored(restored);
                 }
 
                 _lastKnownInterfaceUp = true;
                 _interfaceUpSince = null;
-                return false;
             }
 
-            var isUp = InterfaceStatusCheck(iface);
+            notify?.Invoke();
+            return false;
+        }
 
+        // Interface enumeration and subscriber callbacks (DisconnectAll, rebind) must not
+        // run while _stateLock is held. Accept paths read IsFailClosedActive on that lock.
+        var isUp = InterfaceStatusCheck(iface);
+        Action transition = null;
+        var result = false;
+        var checkEgress = false;
+
+        lock (_stateLock)
+        {
             if (!isUp)
             {
                 _interfaceUpSince = null;
@@ -202,81 +198,129 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
                     _isFailClosedActive = true;
                     _lastKnownInterfaceUp = false;
                     _logger.Error("VPN Kill Switch Triggered! Interface '{0}' dropped or unavailable. Halting all BitTorrent network traffic (fail-closed).", iface);
-
-                    try
-                    {
-                        VpnDropped?.Invoke(iface);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error in VpnDropped subscriber callback");
-                    }
-
-                    _eventAggregator?.PublishEvent(new VpnKillSwitchTriggeredEvent(iface));
+                    var dropped = iface;
+                    transition = () => RaiseDropped(dropped);
                 }
 
-                return true;
+                result = true;
             }
-            else
+            else if (_isFailClosedActive || !_lastKnownInterfaceUp)
             {
-                if (_isFailClosedActive || !_lastKnownInterfaceUp)
+                var now = UtcNowProvider();
+                var delayConfig = _configService?.VpnStabilizationDelaySeconds ?? 8;
+                var stabilizationDelay = delayConfig > 0 ? delayConfig : 8;
+
+                if (_interfaceUpSince == null)
                 {
-                    var now = UtcNowProvider();
-                    var delayConfig = _configService?.VpnStabilizationDelaySeconds ?? 8;
-                    var stabilizationDelay = delayConfig > 0 ? delayConfig : 8;
-
-                    if (_interfaceUpSince == null)
-                    {
-                        _interfaceUpSince = now;
-                        _logger.Info("VPN interface '{0}' detected Up. Entering stabilization hold-down period ({1}s).", iface, stabilizationDelay);
-                        return true;
-                    }
-
+                    _interfaceUpSince = now;
+                    _logger.Info("VPN interface '{0}' detected Up. Entering stabilization hold-down period ({1}s).", iface, stabilizationDelay);
+                    result = true;
+                }
+                else
+                {
                     var elapsed = (now - _interfaceUpSince.Value).TotalSeconds;
                     if (elapsed < stabilizationDelay)
                     {
                         _logger.Debug("VPN interface '{0}' stabilizing ({1:0.0}s / {2}s elapsed). Fail-closed remains active.", iface, elapsed, stabilizationDelay);
-                        return true;
+                        result = true;
                     }
-
-                    var egressHealthy = false;
-                    try
+                    else
                     {
-                        egressHealthy = InterfaceEgressCheck(iface);
+                        checkEgress = true;
+                        result = true;
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.Warn(ex, "Exception during egress health check for interface '{0}'", iface);
-                        egressHealthy = false;
-                    }
+                }
+            }
+        }
 
-                    if (!egressHealthy)
-                    {
-                        _logger.Warn("VPN interface '{0}' hold-down timer elapsed, but egress health check failed. Fail-closed remains active.", iface);
-                        return true;
-                    }
+        if (!checkEgress)
+        {
+            transition?.Invoke();
+            return result;
+        }
 
+        var egressHealthy = false;
+        try
+        {
+            egressHealthy = InterfaceEgressCheck(iface);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Exception during egress health check for interface '{0}'", iface);
+            egressHealthy = false;
+        }
+
+        lock (_stateLock)
+        {
+            if (_isFailClosedActive || !_lastKnownInterfaceUp)
+            {
+                if (!egressHealthy)
+                {
+                    _logger.Warn("VPN interface '{0}' hold-down timer elapsed, but egress health check failed. Fail-closed remains active.", iface);
+                    result = true;
+                }
+                else
+                {
                     _isFailClosedActive = false;
                     _lastKnownInterfaceUp = true;
                     _interfaceUpSince = null;
                     _logger.Info("VPN interface '{0}' verified online, stable, and operational. Disengaging fail-closed state.", iface);
-
-                    try
-                    {
-                        VpnRestored?.Invoke(iface);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error in VpnRestored subscriber callback");
-                    }
-
-                    _eventAggregator?.PublishEvent(new VpnInterfaceRestoredEvent(iface));
-                    _eventAggregator?.PublishEvent(new VpnRestoredEvent(iface));
+                    var restoredIface = iface;
+                    transition = () => RaiseRestored(restoredIface);
+                    result = false;
                 }
-
-                return false;
+            }
+            else
+            {
+                result = false;
             }
         }
+
+        transition?.Invoke();
+        return result;
+    }
+
+    private static bool IsKillSwitchArmed(bool enabled, string iface)
+    {
+        if (!enabled || string.IsNullOrWhiteSpace(iface))
+        {
+            return false;
+        }
+
+        return !string.Equals(iface, "Any", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(iface, "all", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(iface, "0.0.0.0", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(iface, "::", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(iface, "*", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void RaiseDropped(string iface)
+    {
+        try
+        {
+            VpnDropped?.Invoke(iface);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Error in VpnDropped subscriber callback");
+        }
+
+        _eventAggregator?.PublishEvent(new VpnKillSwitchTriggeredEvent(iface));
+    }
+
+    private void RaiseRestored(string iface)
+    {
+        try
+        {
+            VpnRestored?.Invoke(iface);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Error in VpnRestored subscriber callback");
+        }
+
+        _eventAggregator?.PublishEvent(new VpnInterfaceRestoredEvent(iface ?? string.Empty));
+        _eventAggregator?.PublishEvent(new VpnRestoredEvent(iface ?? string.Empty));
     }
 
     public IPAddress GetVpnInterfaceIpAddress(AddressFamily family = AddressFamily.InterNetwork)

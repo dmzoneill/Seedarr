@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
@@ -77,6 +78,61 @@ public class VpnKillSwitchServiceTest
         Assert.That(vpnDroppedCalled, Is.True);
         Assert.That(droppedInterface, Is.EqualTo("tun0"));
         _eventAggregator.Received(1).PublishEvent(Arg.Is<VpnKillSwitchTriggeredEvent>(e => e.InterfaceName == "tun0"));
+    }
+
+    [Test]
+    public void CheckVpnState_does_not_hold_state_lock_while_vpn_dropped_runs()
+    {
+        _configService.EnableVpnKillSwitch.Returns(true);
+        _configService.BindInterface.Returns("tun0");
+        _service.InterfaceStatusCheck = _ => false;
+
+        var readerFinished = false;
+        var observedFailClosed = false;
+        _service.VpnDropped += _ =>
+        {
+            var reader = Task.Run(() =>
+            {
+                observedFailClosed = _service.IsFailClosedActive;
+            });
+            readerFinished = reader.Wait(TimeSpan.FromMilliseconds(250));
+        };
+
+        var triggered = _service.CheckVpnState();
+
+        Assert.That(triggered, Is.True);
+        Assert.That(readerFinished, Is.True);
+        Assert.That(observedFailClosed, Is.True);
+    }
+
+    [Test]
+    public void CheckVpnState_does_not_hold_state_lock_while_vpn_restored_runs()
+    {
+        _configService.EnableVpnKillSwitch.Returns(true);
+        _configService.BindInterface.Returns("wg0");
+        _service.InterfaceStatusCheck = _ => false;
+        _service.CheckVpnState();
+
+        _service.InterfaceStatusCheck = _ => true;
+        _service.CheckVpnState();
+        _currentTime = _currentTime.AddSeconds(8);
+
+        var readerFinished = false;
+        var stillFailClosed = true;
+        _service.VpnRestored += _ =>
+        {
+            var reader = Task.Run(() =>
+            {
+                stillFailClosed = _service.IsFailClosedActive;
+            });
+            readerFinished = reader.Wait(TimeSpan.FromMilliseconds(250));
+        };
+
+        var triggered = _service.CheckVpnState();
+
+        Assert.That(triggered, Is.False);
+        Assert.That(readerFinished, Is.True);
+        Assert.That(stillFailClosed, Is.False);
     }
 
     [Test]
@@ -333,6 +389,167 @@ public class VpnKillSwitchServiceTest
 
         Assert.That(_service.IsFailClosedActive, Is.True);
         _eventAggregator.Received(1).PublishEvent(Arg.Is<VpnKillSwitchTriggeredEvent>(e => e.InterfaceName == "tun0"));
+    }
+
+    [Test]
+    public void CheckVpnState_WhenDisabledAfterDrop_DisengagesAndPublishesRestored()
+    {
+        _configService.EnableVpnKillSwitch.Returns(true);
+        _configService.BindInterface.Returns("tun0");
+        _service.InterfaceStatusCheck = _ => false;
+        _service.CheckVpnState();
+        Assert.That(_service.IsFailClosedActive, Is.True);
+
+        _configService.EnableVpnKillSwitch.Returns(false);
+        var triggered = _service.CheckVpnState();
+
+        Assert.That(triggered, Is.False);
+        Assert.That(_service.IsFailClosedActive, Is.False);
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<VpnInterfaceRestoredEvent>(e => e.InterfaceName == "tun0"));
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<VpnRestoredEvent>(e => e.InterfaceName == "tun0"));
+    }
+
+    [Test]
+    public void CheckVpnState_WhenBindingClearedAfterDrop_PublishesRestoredWithEmptyName()
+    {
+        _configService.EnableVpnKillSwitch.Returns(true);
+        _configService.BindInterface.Returns("tun0");
+        _service.InterfaceStatusCheck = _ => false;
+        _service.CheckVpnState();
+
+        _configService.BindInterface.Returns((string)null);
+        Assert.That(_service.CheckVpnState(), Is.False);
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<VpnInterfaceRestoredEvent>(e => e.InterfaceName == string.Empty));
+    }
+
+    [TestCase("Any")]
+    [TestCase("all")]
+    [TestCase("0.0.0.0")]
+    [TestCase("::")]
+    [TestCase("*")]
+    [TestCase("  ")]
+    public void CheckVpnState_WhenBindingIsNotARealInterface_DoesNotEngage(string iface)
+    {
+        _configService.EnableVpnKillSwitch.Returns(true);
+        _configService.BindInterface.Returns(iface);
+        _service.InterfaceStatusCheck = _ => false;
+
+        Assert.That(_service.CheckVpnState(), Is.False);
+        Assert.That(_service.IsFailClosedActive, Is.False);
+        Assert.That(_service.State, Is.EqualTo(VpnState.Disabled));
+    }
+
+    [Test]
+    public void CheckVpnState_WhenDroppedSubscriberThrows_StillPublishesTriggeredEvent()
+    {
+        _configService.EnableVpnKillSwitch.Returns(true);
+        _configService.BindInterface.Returns("tun0");
+        _service.InterfaceStatusCheck = _ => false;
+        _service.VpnDropped += _ => throw new InvalidOperationException("disconnect failed");
+
+        Assert.DoesNotThrow(() => _service.CheckVpnState());
+        Assert.That(_service.IsFailClosedActive, Is.True);
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<VpnKillSwitchTriggeredEvent>(e => e.InterfaceName == "tun0"));
+    }
+
+    [Test]
+    public void CheckVpnState_WhenRestoredSubscriberThrows_StillPublishesRestoredEvents()
+    {
+        _configService.EnableVpnKillSwitch.Returns(true);
+        _configService.BindInterface.Returns("wg0");
+        _service.InterfaceStatusCheck = _ => false;
+        _service.CheckVpnState();
+        _service.InterfaceStatusCheck = _ => true;
+        _service.CheckVpnState();
+        _currentTime = _currentTime.AddSeconds(8);
+        _service.VpnRestored += _ => throw new InvalidOperationException("rebind failed");
+
+        Assert.DoesNotThrow(() => _service.CheckVpnState());
+        Assert.That(_service.IsFailClosedActive, Is.False);
+        _eventAggregator.Received(1).PublishEvent(Arg.Any<VpnInterfaceRestoredEvent>());
+        _eventAggregator.Received(1).PublishEvent(Arg.Any<VpnRestoredEvent>());
+    }
+
+    [Test]
+    public void CheckVpnState_WhenRestoreCompletesDuringEgressCheck_DoesNotStayFailClosed()
+    {
+        _configService.EnableVpnKillSwitch.Returns(true);
+        _configService.BindInterface.Returns("wg0");
+        _service.InterfaceStatusCheck = _ => false;
+        _service.CheckVpnState();
+        _service.InterfaceStatusCheck = _ => true;
+        _service.CheckVpnState();
+        _currentTime = _currentTime.AddSeconds(8);
+
+        var egressCalls = 0;
+        _service.InterfaceEgressCheck = _ =>
+        {
+            egressCalls++;
+            if (egressCalls == 1)
+            {
+                _service.CheckVpnState();
+            }
+
+            return true;
+        };
+
+        var triggered = _service.CheckVpnState();
+
+        Assert.That(egressCalls, Is.EqualTo(2));
+        Assert.That(triggered, Is.False);
+        Assert.That(_service.IsFailClosedActive, Is.False);
+    }
+
+    [Test]
+    public void CheckVpnState_WhenStabilizationDelayIsZero_UsesEightSecondDefault()
+    {
+        _configService.EnableVpnKillSwitch.Returns(true);
+        _configService.BindInterface.Returns("wg0");
+        _configService.VpnStabilizationDelaySeconds.Returns(0);
+        _service.InterfaceStatusCheck = _ => false;
+        _service.CheckVpnState();
+        _service.InterfaceStatusCheck = _ => true;
+        _service.CheckVpnState();
+
+        _currentTime = _currentTime.AddSeconds(7);
+        Assert.That(_service.CheckVpnState(), Is.True);
+        Assert.That(_service.IsFailClosedActive, Is.True);
+
+        _currentTime = _currentTime.AddSeconds(1);
+        Assert.That(_service.CheckVpnState(), Is.False);
+        Assert.That(_service.IsFailClosedActive, Is.False);
+    }
+
+    [Test]
+    public void CheckVpnState_WhenInterfaceStaysDown_PublishesDropOnce()
+    {
+        _configService.EnableVpnKillSwitch.Returns(true);
+        _configService.BindInterface.Returns("tun0");
+        _service.InterfaceStatusCheck = _ => false;
+
+        _service.CheckVpnState();
+        _service.CheckVpnState();
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Any<VpnKillSwitchTriggeredEvent>());
+    }
+
+    [Test]
+    public void CheckVpnState_WhenEgressCheckThrows_KeepsFailClosed()
+    {
+        _configService.EnableVpnKillSwitch.Returns(true);
+        _configService.BindInterface.Returns("wg0");
+        _service.InterfaceStatusCheck = _ => false;
+        _service.CheckVpnState();
+        _service.InterfaceStatusCheck = _ => true;
+        _service.CheckVpnState();
+        _currentTime = _currentTime.AddSeconds(8);
+        _service.InterfaceEgressCheck = _ => throw new InvalidOperationException("egress failed");
+
+        var triggered = _service.CheckVpnState();
+
+        Assert.That(triggered, Is.True);
+        Assert.That(_service.IsFailClosedActive, Is.True);
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<VpnInterfaceRestoredEvent>());
     }
 
     [Test]
