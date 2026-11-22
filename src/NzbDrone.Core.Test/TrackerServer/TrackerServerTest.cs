@@ -2556,4 +2556,32 @@ public class TrackerServerTest
         Assert.That(traffic.ContainsKey("old"), Is.False);
         Assert.That(traffic.ContainsKey("fresh"), Is.True);
     }
+
+    [Test]
+    public void NormalizeInfoHashToHex_returns_null_for_a_null_payload()
+    {
+        var method = typeof(Core.TrackerServer.TrackerServer).GetMethod(
+            "NormalizeInfoHashToHex",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.That(method.Invoke(null, new object[] { null }), Is.Null);
+    }
+
+    [Test]
+    public void PruneStalePeerTraffic_drops_the_oldest_rows_when_the_map_is_over_capacity()
+    {
+        var field = typeof(Core.TrackerServer.TrackerServer).GetField("_peerTraffic", BindingFlags.NonPublic | BindingFlags.Instance);
+        var traffic = (ConcurrentDictionary<string, (long Uploaded, long Downloaded, DateTime LastSeenUtc)>)field.GetValue(_trackerServer);
+        var now = DateTime.UtcNow;
+        for (var i = 0; i < Core.TrackerServer.TrackerServer.MaxPeerTrafficEntries + 1; i++)
+        {
+            traffic["peer-" + i] = (1, 1, now.AddSeconds(i));
+        }
+
+        var removed = _trackerServer.PruneStalePeerTraffic(now.AddMinutes(1));
+
+        Assert.That(removed, Is.EqualTo(1));
+        Assert.That(traffic.Count, Is.EqualTo(Core.TrackerServer.TrackerServer.MaxPeerTrafficEntries));
+        Assert.That(traffic.ContainsKey("peer-0"), Is.False);
+    }
 }

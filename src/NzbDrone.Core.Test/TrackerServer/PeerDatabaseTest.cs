@@ -618,4 +618,34 @@ public class PeerDatabaseTest
 
         Assert.That(_peerDatabase.GetStats("orphan-hash").Downloaded, Is.EqualTo(0));
     }
+
+    [Test]
+    public void AddPeer_ignores_an_empty_info_hash()
+    {
+        _peerDatabase.AddPeer(null, "10.0.0.1", 6881, "peer");
+        _peerDatabase.AddPeer(string.Empty, "10.0.0.1", 6881, "peer");
+
+        Assert.That(_peerDatabase.GetTotalTorrentCount(), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void AddPeer_evicts_a_later_peer_when_an_earlier_one_was_refreshed()
+    {
+        const string infoHash = "hash-refresh";
+        _peerDatabase.AddPeer(infoHash, "10.0.0.1", 1, "first");
+        System.Threading.Thread.Sleep(20);
+        for (var port = 2; port <= PeerDatabase.MaxPeersPerInfoHash; port++)
+        {
+            _peerDatabase.AddPeer(infoHash, "10.0.0.1", port, "peer" + port);
+        }
+
+        System.Threading.Thread.Sleep(20);
+        _peerDatabase.AddPeer(infoHash, "10.0.0.1", 1, "refreshed");
+        _peerDatabase.AddPeer(infoHash, "10.0.0.1", PeerDatabase.MaxPeersPerInfoHash + 1, "newest");
+
+        var peers = _peerDatabase.GetPeers(infoHash);
+        Assert.That(peers, Has.Count.EqualTo(PeerDatabase.MaxPeersPerInfoHash));
+        Assert.That(peers.Any(peer => peer.Port == 1), Is.True);
+        Assert.That(peers.Any(peer => peer.Port == 2), Is.False);
+    }
 }
