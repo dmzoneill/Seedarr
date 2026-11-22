@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
@@ -826,7 +829,13 @@ public class ChokeManagerTest
         peer.AllowedFastPieces.Add(5);
 
         var sentMessages = new List<PeerMessage>();
-        peer.MessageSent += (c, msg) => sentMessages.Add(msg);
+        peer.MessageSent += (c, msg) =>
+        {
+            lock (sentMessages)
+            {
+                sentMessages.Add(msg);
+            }
+        };
 
         peer.PendingIncomingRequests.Add(new PeerRequest(3, 0, 16384));
         peer.PendingIncomingRequests.Add(new PeerRequest(5, 0, 16384));
@@ -834,9 +843,20 @@ public class ChokeManagerTest
         _subject.Choke(peer);
 
         Assert.That(peer.AmChoking, Is.True);
-        Assert.That(sentMessages.Any(m => m.Type == PeerMessageType.Choke), Is.True);
+        Assert.That(() =>
+        {
+            lock (sentMessages)
+            {
+                return sentMessages.Any(m => m.Type == PeerMessageType.Choke)
+                    && sentMessages.Count(m => m.Type == PeerMessageType.RejectRequest) == 1;
+            }
+        }, Is.True.After(2000, 20));
 
-        var rejectMessages = sentMessages.Where(m => m.Type == PeerMessageType.RejectRequest).ToList();
+        List<PeerMessage> rejectMessages;
+        lock (sentMessages)
+        {
+            rejectMessages = sentMessages.Where(m => m.Type == PeerMessageType.RejectRequest).ToList();
+        }
         Assert.That(rejectMessages.Count, Is.EqualTo(1));
 
         var rejectMsg = rejectMessages[0];
@@ -853,6 +873,44 @@ public class ChokeManagerTest
 
         Assert.That(peer.PendingIncomingRequests.Any(r => r.PieceIndex == 3), Is.False);
         Assert.That(peer.PendingIncomingRequests.Any(r => r.PieceIndex == 5), Is.True);
+    }
+
+    [Test]
+    public void Choke_fast_extension_peer_with_pipelined_requests_stays_connected()
+    {
+        const int pendingRequests = 200;
+        var stream = new MemoryStream();
+        var peer = new PeerConnection(stream, "127.0.0.1", 1601)
+        {
+            InfoHash = "hashA",
+            PeerInterested = true,
+            AmChoking = false,
+            SupportsFastExtension = true
+        };
+        _connections.Add(peer);
+
+        for (var i = 0; i < pendingRequests; i++)
+        {
+            peer.PendingIncomingRequests.Add(new PeerRequest(i, 0, 16384));
+        }
+
+        var rejects = 0;
+        peer.MessageSent += (_, msg) =>
+        {
+            if (msg.Type == PeerMessageType.RejectRequest)
+            {
+                Interlocked.Increment(ref rejects);
+            }
+        };
+
+        _subject.Choke(peer);
+
+        Assert.That(peer.IsDisposed, Is.False);
+        Assert.That(peer.IsConnected, Is.True);
+        Assert.That(peer.AmChoking, Is.True);
+        Assert.That(peer.PendingIncomingRequests, Is.Empty);
+        Assert.That(() => Volatile.Read(ref rejects), Is.EqualTo(pendingRequests).After(3000, 20));
+        Assert.That(stream.Length, Is.EqualTo(5 + (pendingRequests * 17)));
     }
 
     [Test]
@@ -1022,5 +1080,231 @@ public class ChokeManagerTest
         Assert.That(peer.LastBlockReceived, Is.EqualTo(now));
         Assert.That(peer.LastPieceReceived, Is.EqualTo(now));
         Assert.That(peer.IsSnubbed, Is.False);
+    }
+
+    [Test]
+    [CancelAfter(15000)]
+    public void Stalled_peer_write_does_not_block_other_peers()
+    {
+        var stall = new StallStream();
+        var otherStream = new MemoryStream();
+        var stalled = new PeerConnection(stall, "10.0.0.1", 4001)
+        {
+            InfoHash = "hashStall",
+            PeerInterested = true,
+            AmChoking = false,
+            WriteTimeoutMs = 60_000
+        };
+        var other = new PeerConnection(otherStream, "10.0.0.2", 4002)
+        {
+            InfoHash = "hashOther",
+            PeerInterested = true,
+            AmChoking = true,
+            WriteTimeoutMs = 5_000
+        };
+        _connections.Add(stalled);
+        _connections.Add(other);
+        _configService.MaxUploadSlots.Returns(0);
+
+        Task upload = null;
+        try
+        {
+            upload = Task.Run(() => stalled.SendMessage(new PeerMessage
+            {
+                Type = PeerMessageType.Piece,
+                Payload = new byte[64],
+                PayloadLength = 64
+            }));
+
+            Assert.That(() => stall.WriteEntered > 0, Is.True.After(3000, 10));
+
+            var chokeStalled = Task.Run(() => _subject.PeerBecameSeed(stalled));
+            var interested = Task.Run(() => _subject.PeerInterestedChanged(other));
+
+            Assert.That(chokeStalled.Wait(TimeSpan.FromSeconds(2)), Is.True,
+                "Choking the stalled peer must not wait on its socket write");
+            Assert.That(interested.Wait(TimeSpan.FromSeconds(2)), Is.True,
+                "An unrelated peer's INTERESTED handling must not wait on the stalled write");
+            Assert.That(upload.IsCompleted, Is.False, "The stalled peer write must still be blocked");
+            Assert.That(other.AmChoking, Is.False);
+            Assert.That(() => otherStream.Length >= 5, Is.True.After(2000, 10),
+                "The unrelated peer must receive its unchoke while the stalled write is still blocked");
+        }
+        finally
+        {
+            stall.Release();
+            try
+            {
+                upload?.Wait(TimeSpan.FromSeconds(2));
+            }
+            catch (AggregateException)
+            {
+                // The stalled write can surface a dispose/timeout once the gate opens during cleanup.
+            }
+
+            stalled.Dispose();
+            other.Dispose();
+        }
+    }
+
+    [Test]
+    public void PeerUnchoked_handler_exception_does_not_escape_the_unchoke_round()
+    {
+        _configService.MaxUploadSlots.Returns(0);
+        var peer = CreatePeer("hashA", 1501);
+        _subject.PeerUnchoked += _ => throw new InvalidOperationException("listener failed");
+
+        Assert.DoesNotThrow(() => _subject.ProcessRegularUnchoke());
+        Assert.That(peer.AmChoking, Is.False);
+    }
+
+    [Test]
+    [CancelAfter(15000)]
+    public void Choke_and_unchoke_swallow_a_full_outbound_queue()
+    {
+        _configService.MaxUploadSlots.Returns(0);
+        var chokeStall = new StallStream();
+        var unchokeStall = new StallStream();
+        var toChoke = new PeerConnection(chokeStall, "10.0.0.3", 4301)
+        {
+            InfoHash = "hashChoke",
+            PeerInterested = true,
+            AmChoking = false,
+            WriteTimeoutMs = 60_000
+        };
+        var toUnchoke = new PeerConnection(unchokeStall, "10.0.0.4", 4302)
+        {
+            InfoHash = "hashUnchoke",
+            PeerInterested = true,
+            AmChoking = true,
+            WriteTimeoutMs = 60_000
+        };
+        _connections.Add(toChoke);
+        _connections.Add(toUnchoke);
+
+        Task chokeUpload = null;
+        Task unchokeUpload = null;
+        try
+        {
+            chokeUpload = Task.Run(() => toChoke.SendMessage(new PeerMessage
+            {
+                Type = PeerMessageType.Piece,
+                Payload = new byte[8],
+                PayloadLength = 8
+            }));
+            unchokeUpload = Task.Run(() => toUnchoke.SendMessage(new PeerMessage
+            {
+                Type = PeerMessageType.Piece,
+                Payload = new byte[8],
+                PayloadLength = 8
+            }));
+
+            Assert.That(() => chokeStall.WriteEntered > 0 && unchokeStall.WriteEntered > 0, Is.True.After(3000, 10));
+
+            for (var i = 0; i < PeerConnection.OutboundQueueCapacity; i++)
+            {
+                toChoke.PostMessage(new PeerMessage { Type = PeerMessageType.Interested });
+                toUnchoke.PostMessage(new PeerMessage { Type = PeerMessageType.Interested });
+            }
+
+            Assert.DoesNotThrow(() => _subject.Choke(toChoke));
+            Assert.That(toChoke.AmChoking, Is.True);
+
+            Assert.DoesNotThrow(() => _subject.ProcessRegularUnchoke());
+            Assert.That(toUnchoke.AmChoking, Is.False);
+        }
+        finally
+        {
+            chokeStall.Release();
+            unchokeStall.Release();
+            try
+            {
+                chokeUpload?.Wait(TimeSpan.FromSeconds(2));
+            }
+            catch (AggregateException)
+            {
+            }
+
+            try
+            {
+                unchokeUpload?.Wait(TimeSpan.FromSeconds(2));
+            }
+            catch (AggregateException)
+            {
+            }
+
+            toChoke.Dispose();
+            toUnchoke.Dispose();
+        }
+    }
+
+    [Test]
+    public void Choke_lock_edges_release_once_and_isolate_callback_failures()
+    {
+        var defer = typeof(ChokeManager).GetMethod("DeferAfterLock", BindingFlags.Instance | BindingFlags.NonPublic);
+        var runAfter = typeof(ChokeManager).GetMethod("RunAfterLock", BindingFlags.Instance | BindingFlags.NonPublic);
+        var enter = typeof(ChokeManager).GetMethod("EnterLock", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.DoesNotThrow(() => defer.Invoke(_subject, new object[] { null }));
+
+        var ran = false;
+        defer.Invoke(_subject, new object[] { (Action)(() => ran = true) });
+        Assert.That(ran, Is.True);
+
+        Assert.DoesNotThrow(() => runAfter.Invoke(_subject, new object[] { null }));
+        Assert.DoesNotThrow(() => runAfter.Invoke(
+            _subject,
+            new object[] { new List<Action> { () => throw new InvalidOperationException("post-lock failed") } }));
+
+        var scope = enter.Invoke(_subject, null);
+        var dispose = scope.GetType().GetMethod("Dispose");
+        dispose.Invoke(scope, null);
+        dispose.Invoke(scope, null);
+    }
+
+    private sealed class StallStream : MemoryStream
+    {
+        private readonly ManualResetEventSlim _release = new(false);
+
+        private int _writeEntered;
+
+        public int WriteEntered => Volatile.Read(ref _writeEntered);
+
+        public void Release()
+        {
+            _release.Set();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            Block();
+        }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            Block(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.CompletedTask;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            _release.Set();
+            base.Dispose(disposing);
+        }
+
+        private void Block(CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _writeEntered);
+            while (!_release.IsSet)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                Thread.Sleep(10);
+            }
+        }
     }
 }
