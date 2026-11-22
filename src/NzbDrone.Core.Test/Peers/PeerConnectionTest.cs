@@ -660,6 +660,95 @@ public class PeerConnectionTest
         Assert.That(result, Is.False);
     }
 
+    [Test]
+    public async Task First_byte_peek_uses_async_read_and_does_not_block_a_pool_thread()
+    {
+        var stream = new AsyncOnlyFirstByteStream();
+        var conn = new PeerConnection(stream, "127.0.0.1", 6881)
+        {
+            HandshakeTimeoutMs = 2000
+        };
+        _connections.Add(conn);
+
+        var ok = await conn.NegotiateEncryptionIncomingAsync(_ => false, EncryptionMode.PreferEncrypted);
+
+        Assert.That(ok, Is.True);
+        Assert.That(conn.IsEncrypted, Is.False);
+        Assert.That(stream.SyncReads, Is.EqualTo(0));
+    }
+
+    [Test]
+    [CancelAfter(5000)]
+    public void ReceiveHandshake_stops_a_slowloris_at_the_absolute_deadline()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        _listeners.Add(listener);
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        var client = new TcpClient();
+        client.Connect(IPAddress.Loopback, port);
+        _clients.Add(client);
+        var serverTcp = listener.AcceptTcpClient();
+        var server = new PeerConnection(serverTcp)
+        {
+            HandshakeTimeoutMs = 400
+        };
+        _connections.Add(server);
+
+        var trickle = Task.Run(async () =>
+        {
+            var stream = client.GetStream();
+            try
+            {
+                for (var i = 0; i < 80; i++)
+                {
+                    var one = new byte[] { i == 0 ? (byte)19 : (byte)0 };
+                    await stream.WriteAsync(one);
+                    await stream.FlushAsync();
+                    await Task.Delay(150);
+                }
+            }
+            catch (Exception)
+            {
+                // The server closes the socket when the handshake deadline fires.
+            }
+        });
+
+        var started = DateTime.UtcNow;
+        var finished = Task.Run(() => server.ReceiveHandshake()).Wait(TimeSpan.FromMilliseconds(1200));
+        var elapsedMs = (DateTime.UtcNow - started).TotalMilliseconds;
+
+        client.Close();
+        trickle.Wait(TimeSpan.FromSeconds(2));
+
+        Assert.That(finished, Is.True, "handshake was still running after the absolute deadline");
+        Assert.That(elapsedMs, Is.LessThan(1200));
+    }
+
+    private sealed class AsyncOnlyFirstByteStream : MemoryStream
+    {
+        public int SyncReads;
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            Interlocked.Increment(ref SyncReads);
+            throw new InvalidOperationException("sync read");
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            Interlocked.Increment(ref SyncReads);
+            throw new InvalidOperationException("sync read");
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            buffer.Span[0] = 19;
+            return ValueTask.FromResult(1);
+        }
+    }
+
     // SendHandshake failure tests
 
     [Test]
