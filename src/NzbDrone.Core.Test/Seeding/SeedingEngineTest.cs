@@ -2005,6 +2005,101 @@ public class SeedingEngineTest
     }
 
     [Test]
+    public void Tick_carries_fractional_seeding_time_instead_of_truncating_each_tick()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            SeedingTime = 10,
+            Progress = 1.0,
+            TotalSize = 1_000_000,
+            InfoHash = "seed-fraction"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 0 });
+
+        CallTickWithDelta(TimeSpan.FromMilliseconds(1900));
+        CallTickWithDelta(TimeSpan.FromMilliseconds(1900));
+
+        // 1.9 + 1.9 = 3.8s. Truncating each tick would record 2.
+        Assert.That(torrent.SeedingTime, Is.EqualTo(13));
+    }
+
+    [Test]
+    public void Tick_seeding_time_matches_the_carried_sum_of_fractional_ticks()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            SeedingTime = 1_000,
+            Progress = 1.0,
+            TotalSize = 1_000_000,
+            InfoHash = "seed-fraction-property"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 0 });
+
+        var rng = new Random(1393);
+        double carried = 0;
+        double elapsed = 0;
+        long expected = torrent.SeedingTime;
+        for (var i = 0; i < 40; i++)
+        {
+            var delta = TimeSpan.FromMilliseconds(125 * rng.Next(1, 24));
+            CallTickWithDelta(delta);
+            var seconds = delta.TotalSeconds;
+            elapsed += seconds;
+            carried += seconds;
+            var whole = (long)Math.Floor(carried);
+            carried -= whole;
+            expected += whole;
+        }
+
+        Assert.That(torrent.SeedingTime, Is.EqualTo(expected));
+        Assert.That(Math.Abs((torrent.SeedingTime - 1_000) - elapsed), Is.LessThan(1.0));
+    }
+
+    [Test]
+    public void Tick_carries_fractional_stall_duration_and_clears_it_when_transfer_resumes()
+    {
+        var torrent = new Torrent
+        {
+            Id = 44,
+            InfoHash = "stall-fraction",
+            Status = TorrentStatus.Downloading,
+            PieceCount = 2,
+            TotalSize = 1_000_000,
+            Progress = 0.5,
+            DownloadSpeed = 0,
+            StallDurationSeconds = 0,
+            Active = true
+        };
+        _pieceStorage.GetVerifiedPieces(torrent.InfoHash).Returns(new[] { true, false });
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection>());
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _distributionManager.DistributeDownloadSpeeds(Arg.Any<int>(), Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 0 });
+
+        CallTickWithDelta(TimeSpan.FromMilliseconds(1900));
+        CallTickWithDelta(TimeSpan.FromMilliseconds(1900));
+
+        Assert.That(torrent.StallDurationSeconds, Is.EqualTo(3));
+
+        torrent.Downloaded += 50_000;
+        CallTickWithDelta(TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.StallDurationSeconds, Is.EqualTo(0));
+
+        CallTickWithDelta(TimeSpan.FromMilliseconds(400));
+
+        Assert.That(torrent.StallDurationSeconds, Is.EqualTo(0));
+    }
+
+    [Test]
     public void Tick_should_not_publish_stalled_event_when_torrent_is_vpn_paused()
     {
         var torrent = new Torrent
