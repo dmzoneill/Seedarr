@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -3738,5 +3739,45 @@ public class DhtServiceTest
     {
         SetUdpClient();
         await Assert.DoesNotThrowAsync(async () => await _service.SendAnnouncePeer(null, new byte[20], 6881, new byte[4]));
+    }
+
+    [Test]
+    public void RecentlyProbed_drops_entries_older_than_the_probe_window()
+    {
+        var probed = RecentlyProbed();
+        var stale = new IPEndPoint(IPAddress.Parse("203.0.113.10"), 1000);
+        var fresh = new IPEndPoint(IPAddress.Parse("203.0.113.11"), 1001);
+        probed[stale] = DateTime.UtcNow.AddSeconds(-31);
+        probed[fresh] = DateTime.UtcNow;
+
+        InvokeOnPingBeforeEvict(new IPEndPoint(IPAddress.Parse("203.0.113.12"), 1002));
+
+        Assert.That(probed.ContainsKey(stale), Is.False, "Endpoints probed more than 30s ago must leave the map");
+        Assert.That(probed.ContainsKey(fresh), Is.True);
+    }
+
+    [Test]
+    public void StopDht_clears_recently_probed_endpoints()
+    {
+        var probed = RecentlyProbed();
+        probed[new IPEndPoint(IPAddress.Parse("203.0.113.20"), 2000)] = DateTime.UtcNow;
+
+        typeof(DhtService).GetMethod("StopDht", BindingFlags.NonPublic | BindingFlags.Instance)
+            .Invoke(_service, null);
+
+        Assert.That(probed, Is.Empty);
+    }
+
+    private ConcurrentDictionary<IPEndPoint, DateTime> RecentlyProbed()
+    {
+        return (ConcurrentDictionary<IPEndPoint, DateTime>)typeof(DhtService)
+            .GetField("_recentlyProbed", BindingFlags.NonPublic | BindingFlags.Instance)
+            .GetValue(_service);
+    }
+
+    private void InvokeOnPingBeforeEvict(IPEndPoint endpoint)
+    {
+        typeof(DhtService).GetMethod("OnPingBeforeEvict", BindingFlags.NonPublic | BindingFlags.Instance)
+            .Invoke(_service, new object[] { 0, new DhtNode { EndPoint = endpoint, NodeId = new byte[20] } });
     }
 }
