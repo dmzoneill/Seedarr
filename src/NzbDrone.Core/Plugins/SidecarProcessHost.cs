@@ -30,6 +30,7 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
     private CancellationTokenSource _restartCts;
     private long _requestIdCounter;
     private bool _isStopping;
+    private bool _intentionalStop;
     private bool _disposed;
 
     public SidecarProcessHost(
@@ -69,9 +70,11 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
 
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
+        Process startedProcess = null;
         lock (_stateLock)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            _intentionalStop = false;
 
             if (IsRunning)
             {
@@ -99,6 +102,7 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
 
                 if (_process != null)
                 {
+                    DetachExitHandler(_process);
                     Dispose(true);
                 }
 
@@ -115,16 +119,6 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
 
                 _supervisor?.RegisterProcess(_process);
 
-                try
-                {
-                    _process.EnableRaisingEvents = true;
-                    _process.Exited += OnProcessExited;
-                }
-                catch (Exception ex)
-                {
-                    _logger.Trace(ex, "Could not attach Exited event to plugin process {0}", _manifest.Id);
-                }
-
                 _ioCts?.Cancel();
                 _ioCts?.Dispose();
                 _ioCts = new CancellationTokenSource();
@@ -132,8 +126,8 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
                 Task.Run(() => ReadStandardOutputAsync(_process.StandardOutput, ioToken), ioToken);
                 Task.Run(() => ReadStandardErrorAsync(_process.StandardError, ioToken), ioToken);
 
+                startedProcess = _process;
                 _logger.Info("Plugin '{0}' ({1}) started with PID {2}", _manifest.Name, _manifest.Id, _process.Id);
-                return Task.CompletedTask;
             }
             catch (Exception ex)
             {
@@ -143,6 +137,24 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
                 return Task.CompletedTask;
             }
         }
+
+        // Attach after releasing the lock. EnableRaisingEvents raises Exited on this
+        // thread when the process has already exited, and that handler takes the same lock.
+        if (startedProcess != null)
+        {
+            try
+            {
+                DetachExitHandler(startedProcess);
+                startedProcess.EnableRaisingEvents = true;
+                startedProcess.Exited += OnProcessExited;
+            }
+            catch (Exception ex)
+            {
+                _logger.Trace(ex, "Could not attach Exited event to plugin process {0}", _manifest.Id);
+            }
+        }
+
+        return Task.CompletedTask;
     }
 
     public async Task StopAsync(TimeSpan? timeout = null)
@@ -152,8 +164,10 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
 
         lock (_stateLock)
         {
+            _intentionalStop = true;
             _isStopping = true;
             _restartCts?.Cancel();
+            DetachExitHandler(_process);
 
             processToStop = _process;
             writerToClose = _stdinWriter;
@@ -250,8 +264,10 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
     {
         lock (_stateLock)
         {
+            _intentionalStop = true;
             _isStopping = true;
             _restartCts?.Cancel();
+            DetachExitHandler(_process);
 
             if (_process != null)
             {
@@ -375,6 +391,7 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
         }
 
         _disposed = true;
+        _intentionalStop = true;
         _restartCts?.Cancel();
         _restartCts?.Dispose();
         _ioCts?.Cancel();
@@ -489,16 +506,55 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
         return CustomScriptService.ResolveInterpreter(entrypointPath, string.Empty);
     }
 
+    private void DetachExitHandler(Process process)
+    {
+        if (process == null)
+        {
+            return;
+        }
+
+        try
+        {
+            process.Exited -= OnProcessExited;
+        }
+        catch (Exception)
+        {
+            // Process may already be disposed.
+        }
+    }
+
     private void OnProcessExited(object sender, EventArgs e)
     {
         lock (_stateLock)
         {
-            Dispose(true);
-
-            if (_isStopping)
+            var process = sender as Process;
+            if (process != null)
             {
-                PluginInfo.State = PluginState.Stopped;
+                try
+                {
+                    process.Exited -= OnProcessExited;
+                }
+                catch (Exception)
+                {
+                    // Process may already be disposed.
+                }
+            }
+
+            var intentional = _disposed || _intentionalStop || _isStopping || !ReferenceEquals(process, _process);
+            if (ReferenceEquals(process, _process))
+            {
+                Dispose(true);
                 PluginInfo.ProcessId = null;
+            }
+
+            if (intentional)
+            {
+                if (ReferenceEquals(process, _process) || _process == null)
+                {
+                    PluginInfo.State = PluginState.Stopped;
+                    PluginInfo.ProcessId = null;
+                }
+
                 return;
             }
 
