@@ -26,15 +26,13 @@ public interface ITorrentEventLogService
 
 public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDeletedEvent>, IDisposable, IAsyncDisposable
 {
+    private const int LogChannelCapacity = 10000;
+    private static readonly TimeSpan FlushWaitTimeout = TimeSpan.FromSeconds(1);
+
     private readonly ITorrentEventLogRepository _repository;
     private readonly Logger _logger;
     private readonly Timer _purgeTimer;
-    private readonly Channel<TorrentEventLog> _logChannel = Channel.CreateBounded<TorrentEventLog>(
-        new BoundedChannelOptions(10000)
-        {
-            FullMode = BoundedChannelFullMode.DropOldest,
-            SingleReader = true
-        });
+    private readonly Channel<TorrentEventLog> _logChannel;
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _processTask;
     private readonly SemaphoreSlim _flushLock = new(1, 1);
@@ -49,6 +47,13 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
     {
         _repository = repository;
         _logger = LogManager.GetCurrentClassLogger();
+        _logChannel = Channel.CreateBounded<TorrentEventLog>(
+            new BoundedChannelOptions(LogChannelCapacity)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest,
+                SingleReader = true
+            },
+            _ => Interlocked.Decrement(ref _pendingCount));
         _processTask = Task.Run(ProcessLogsAsync);
         _purgeTimer = new Timer(
             _ =>
@@ -152,7 +157,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IHandle<TorrentDe
             TriggerFlush();
         }
 
-        await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30))).ConfigureAwait(false);
+        await Task.WhenAny(tcs.Task, Task.Delay(FlushWaitTimeout)).ConfigureAwait(false);
         DrainRemainingLogs();
     }
 

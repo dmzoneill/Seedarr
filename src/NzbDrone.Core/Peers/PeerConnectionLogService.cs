@@ -26,10 +26,13 @@ public interface IPeerConnectionLogService
 
 public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, IAsyncDisposable
 {
+    private const int LogChannelCapacity = 10_000;
+    private static readonly TimeSpan FlushWaitTimeout = TimeSpan.FromSeconds(30);
+
     private readonly IPeerConnectionLogRepository _repository;
     private readonly Logger _logger;
     private readonly Timer _purgeTimer;
-    private readonly Channel<PeerConnectionLog> _logChannel = Channel.CreateBounded<PeerConnectionLog>(new BoundedChannelOptions(10_000) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = false });
+    private readonly Channel<PeerConnectionLog> _logChannel;
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _consumerTask;
     private readonly SemaphoreSlim _flushLock = new(1, 1);
@@ -44,6 +47,14 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
     {
         _repository = repository;
         _logger = LogManager.GetCurrentClassLogger();
+        _logChannel = Channel.CreateBounded<PeerConnectionLog>(
+            new BoundedChannelOptions(LogChannelCapacity)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest,
+                SingleReader = true,
+                SingleWriter = false
+            },
+            _ => Interlocked.Decrement(ref _pendingCount));
         _consumerTask = Task.Run(ProcessLogsAsync);
         _purgeTimer = new Timer(
             _ =>
@@ -161,7 +172,7 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable, 
             TriggerFlush();
         }
 
-        await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30))).ConfigureAwait(false);
+        await Task.WhenAny(tcs.Task, Task.Delay(FlushWaitTimeout)).ConfigureAwait(false);
     }
 
     private void TriggerFlush()
