@@ -371,7 +371,7 @@ CREATE TABLE ""Torrents"" (
                 ""Ratio"", ""TotalSize"", ""UploadSpeed"", ""DownloadSpeed"", ""Progress"", ""Eta"", ""LastActive"", ""Active"",
                 ""Seeders"", ""Leechers"", ""Availability"", ""Threshold"", ""IsVpnPaused"", ""ForceStart"", ""SuperSeeding"",
                 ""SortOrder"", ""Label"", ""Category"", ""Name"", ""Priority"")
-              VALUES (
+                VALUES (
                 @Id, @Status, @Uploaded, 100, 1, 0, 0,
                 0, 1000, 0, 0, 1, 0, NULL, 1,
                 0, 0, 1, 0, 0, 0, 0,
@@ -393,7 +393,7 @@ CREATE TABLE ""Torrents"" (
         using var connection = _database.OpenConnection();
         return connection.QuerySingle<Row>(
             @"SELECT ""Status"", ""Uploaded"", ""Label"", ""Category"", ""Priority"", ""Active"", ""Seeders"", ""Leechers"", ""Availability""
-              FROM ""Torrents"" WHERE ""Id"" = @Id",
+                FROM ""Torrents"" WHERE ""Id"" = @Id",
             new { Id = id });
     }
 
