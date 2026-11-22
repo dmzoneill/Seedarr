@@ -765,6 +765,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
                 else if (recoveredTorrents.Contains(torrent.Id))
                 {
                     torrent.StallDurationSeconds = 0;
+                    _stallDurationFraction.Remove(torrent.Id);
                 }
 
                 var stalledMinutes = torrent.StallDurationSeconds / 60;
@@ -881,23 +882,18 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
 
     private static long TakeWholeSeconds(Dictionary<int, double> fractions, int torrentId, double deltaSeconds)
     {
-        if (deltaSeconds < 0 || double.IsNaN(deltaSeconds) || double.IsInfinity(deltaSeconds))
+        if (deltaSeconds < 0)
         {
             deltaSeconds = 0;
         }
 
         var accumulated = deltaSeconds;
-        if (fractions.TryGetValue(torrentId, out var pending) && pending > 0 && !double.IsNaN(pending) && !double.IsInfinity(pending))
+        if (fractions.TryGetValue(torrentId, out var pending))
         {
             accumulated += pending;
         }
 
         var whole = (long)Math.Floor(accumulated);
-        if (whole < 0)
-        {
-            whole = 0;
-        }
-
         var fraction = accumulated - whole;
         if (fraction <= 0.0000001)
         {

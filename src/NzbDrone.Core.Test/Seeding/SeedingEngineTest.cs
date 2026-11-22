@@ -2028,6 +2028,29 @@ public class SeedingEngineTest
     }
 
     [Test]
+    public void Tick_ignores_a_negative_delta_and_keeps_the_carried_fraction()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            SeedingTime = 10,
+            Progress = 1.0,
+            TotalSize = 1_000_000,
+            InfoHash = "seed-negative-delta"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 0 });
+
+        CallTickWithDelta(TimeSpan.FromMilliseconds(1900));
+        CallTickWithDelta(TimeSpan.FromSeconds(-2));
+        CallTickWithDelta(TimeSpan.FromMilliseconds(200));
+
+        Assert.That(torrent.SeedingTime, Is.EqualTo(12));
+    }
+
+    [Test]
     public void Tick_seeding_time_matches_the_carried_sum_of_fractional_ticks()
     {
         var torrent = new Torrent
