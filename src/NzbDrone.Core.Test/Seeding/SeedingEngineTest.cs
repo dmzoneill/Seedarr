@@ -3071,9 +3071,8 @@ public class SeedingEngineTest
         var method = typeof(SeedingEngine).GetMethod("TriggerDiscoveryRetry", BindingFlags.NonPublic | BindingFlags.Instance);
         method.Invoke(_engine, new object[] { torrent });
 
-        var completed = await Task.WhenAny(announcedPort.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        var port = await announcedPort.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
-        Assert.That(completed, Is.SameAs(announcedPort.Task));
-        Assert.That(await announcedPort.Task, Is.EqualTo(51413));
+        Assert.That(port, Is.EqualTo(51413));
     }
 }
