@@ -79,12 +79,17 @@ void describe("SignalRProvider: configuration maps", () => {
     assert.ok(taskFailedKeys.includes("system/tasks"));
     assert.ok(taskFailedKeys.includes("system/status"));
 
-    // Ensure torrent events invalidate torrents and trackerboost
-    const torrentUpdatedKeys = EVENT_INVALIDATION_MAP.TorrentUpdated.map((k) =>
+    // Membership changes still refresh the list and tracker matrix.
+    const torrentAddedKeys = EVENT_INVALIDATION_MAP.TorrentAdded.map((k) =>
       k.join("/"),
     );
-    assert.ok(torrentUpdatedKeys.includes("torrents"));
-    assert.ok(torrentUpdatedKeys.includes("trackerboost"));
+    assert.ok(torrentAddedKeys.includes("torrents"));
+    assert.ok(torrentAddedKeys.includes("trackerboost"));
+
+    // Progress ticks must not refetch the full list or the tracker matrix.
+    assert.deepEqual(EVENT_INVALIDATION_MAP.TorrentUpdated, []);
+    assert.deepEqual(EVENT_INVALIDATION_MAP.torrent_updated, []);
+    assert.deepEqual(EVENT_INVALIDATION_MAP.torrentUpdated, []);
 
     // Ensure 1Hz seeding tick events ONLY invalidate seeding stats and NOT torrents
     const seedingKeys = EVENT_INVALIDATION_MAP.SeedingStatsUpdated.map((k) =>
