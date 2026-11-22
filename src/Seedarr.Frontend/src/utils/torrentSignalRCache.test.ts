@@ -8,6 +8,7 @@ import type { Torrent } from "../api/types";
 import {
   applyPatchesToTorrentList,
   enqueueTorrentUpdatedPatch,
+  flushTorrentPatches,
   isTorrentUpdatedEvent,
   torrentPatchFromSignalRPayload,
 } from "./torrentSignalRCache";
@@ -212,6 +213,208 @@ void describe("torrentSignalRCache", () => {
     const queryClient = new QueryClient();
     enqueueTorrentUpdatedPatch(queryClient, { id: 1, progress: 0.4 });
     await flushMicrotasks();
+    assert.equal(queryClient.getQueryData(["torrents"]), undefined);
+  });
+
+  void it("copies every known torrent field from a resource payload", () => {
+    const patch = torrentPatchFromSignalRPayload({
+      id: 15,
+      torrentId: 99,
+      name: "Full",
+      infoHash: "hash",
+      totalSize: 10,
+      pieceCount: 2,
+      pieceLength: 3,
+      uploaded: 4,
+      downloaded: 5,
+      ratio: 1.5,
+      seeders: 6,
+      leechers: 7,
+      priority: 8,
+      uploadLimit: 9,
+      downloadLimit: 11,
+      progress: 0.4,
+      announceInterval: 12,
+      nextUpdate: 13,
+      sessionUploaded: 14,
+      sessionDownloaded: 16,
+      smallTorrentLimit: 17,
+      threshold: 18,
+      uploadSpeed: 19,
+      downloadSpeed: 20,
+      availability: 1.2,
+      eta: 21,
+      sortOrder: 22,
+      seedingTime: 23,
+      year: 2024,
+      rating: 8.1,
+      isPrivate: true,
+      superSeeding: true,
+      forceStart: true,
+      sequentialDownload: true,
+      firstLastPiecePrio: true,
+      active: false,
+      forceCompleted: true,
+      isVpnPaused: true,
+      status: "Downloading",
+      dateAdded: "2026-02-02T00:00:00Z",
+      comment: "note",
+      createdBy: "me",
+      creationDate: "2026-01-01T00:00:00Z",
+      trackerUrl: "udp://tracker",
+      sourcePath: "/tmp/a",
+      lastActive: "2026-02-03T00:00:00Z",
+      label: "lbl",
+      category: "movies",
+      savePath: "/save",
+      downloadPath: "/down",
+      posterUrl: "poster",
+      fanartUrl: "fan",
+      bannerUrl: "banner",
+      mediaTitle: "Title",
+      overview: "overview",
+      source: "radarr",
+      errorMessage: "stalled",
+      magnetLink: "magnet:?xt=urn:btih:abc",
+      resolution: "1080p",
+      hdrFormat: "HDR",
+      videoCodec: "x265",
+      audioCodec: "aac",
+      audioChannels: "5.1",
+      genres: ["drama"],
+      trackers: ["udp://tracker"],
+      tagIds: [1, 2],
+      ignored: "nope",
+    });
+
+    assert.deepEqual(patch, {
+      id: 15,
+      name: "Full",
+      infoHash: "hash",
+      totalSize: 10,
+      pieceCount: 2,
+      pieceLength: 3,
+      uploaded: 4,
+      downloaded: 5,
+      ratio: 1.5,
+      seeders: 6,
+      leechers: 7,
+      priority: 8,
+      uploadLimit: 9,
+      downloadLimit: 11,
+      progress: 0.4,
+      announceInterval: 12,
+      nextUpdate: 13,
+      sessionUploaded: 14,
+      sessionDownloaded: 16,
+      smallTorrentLimit: 17,
+      threshold: 18,
+      uploadSpeed: 19,
+      downloadSpeed: 20,
+      availability: 1.2,
+      eta: 21,
+      sortOrder: 22,
+      seedingTime: 23,
+      year: 2024,
+      rating: 8.1,
+      isPrivate: true,
+      superSeeding: true,
+      forceStart: true,
+      sequentialDownload: true,
+      firstLastPiecePrio: true,
+      active: false,
+      forceCompleted: true,
+      isVpnPaused: true,
+      status: "Downloading",
+      dateAdded: "2026-02-02T00:00:00Z",
+      comment: "note",
+      createdBy: "me",
+      creationDate: "2026-01-01T00:00:00Z",
+      trackerUrl: "udp://tracker",
+      sourcePath: "/tmp/a",
+      lastActive: "2026-02-03T00:00:00Z",
+      label: "lbl",
+      category: "movies",
+      savePath: "/save",
+      downloadPath: "/down",
+      posterUrl: "poster",
+      fanartUrl: "fan",
+      bannerUrl: "banner",
+      mediaTitle: "Title",
+      overview: "overview",
+      source: "radarr",
+      errorMessage: "stalled",
+      magnetLink: "magnet:?xt=urn:btih:abc",
+      resolution: "1080p",
+      hdrFormat: "HDR",
+      videoCodec: "x265",
+      audioCodec: "aac",
+      audioChannels: "5.1",
+      genres: ["drama"],
+      trackers: ["udp://tracker"],
+      tagIds: [1, 2],
+    });
+  });
+
+  void it("drops values of the wrong type and accepts nulls on nullable fields", () => {
+    const patch = torrentPatchFromSignalRPayload({
+      id: 16,
+      name: 1,
+      infoHash: null,
+      totalSize: "big",
+      progress: Number.NaN,
+      year: "2024",
+      rating: null,
+      isPrivate: "yes",
+      active: 1,
+      comment: null,
+      overview: null,
+      status: "",
+      genres: [1, "drama"],
+      trackers: "udp://tracker",
+      tagIds: ["1"],
+      posterUrl: 4,
+    });
+
+    assert.deepEqual(patch, { id: 16, rating: null, comment: null, overview: null });
+  });
+
+  void it("maps each numeric torrent status and ignores unknown codes", () => {
+    const expected = [
+      "Stopped",
+      "Seeding",
+      "Paused",
+      "Error",
+      "Queued",
+      "Downloading",
+      "Checking",
+      "QueuedForChecking",
+      "Moving",
+      "StalledNoSeeds",
+    ];
+    for (const [code, status] of expected.entries()) {
+      assert.equal(
+        torrentPatchFromSignalRPayload({ id: 1, Status: code })?.status,
+        status,
+      );
+    }
+    assert.equal(
+      torrentPatchFromSignalRPayload({ id: 1, Status: 99 })?.status,
+      undefined,
+    );
+    assert.equal(
+      torrentPatchFromSignalRPayload({ id: 1, Status: 1.5 })?.status,
+      undefined,
+    );
+  });
+
+  void it("returns the original list when there is nothing to apply", () => {
+    const row = torrent({ id: 1 });
+    const rows = [row];
+    assert.equal(applyPatchesToTorrentList(undefined, [{ id: 1, progress: 1 }]), undefined);
+    assert.equal(applyPatchesToTorrentList(rows, []), rows);
+    const queryClient = new QueryClient();
+    flushTorrentPatches(queryClient, []);
     assert.equal(queryClient.getQueryData(["torrents"]), undefined);
   });
 });
