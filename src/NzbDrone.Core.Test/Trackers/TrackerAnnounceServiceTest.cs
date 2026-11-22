@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using BencodeNET.Objects;
@@ -1807,5 +1808,108 @@ public class TrackerAnnounceServiceTest
                 tiers.Count == 1 &&
                 tiers[0][0] == "mock://tier0-t2.org/announce" &&
                 tiers[0][1] == "mock://tier0-t1.org/announce"));
+    }
+
+    [Test]
+    public void Announce_sends_started_again_after_stopped_even_when_the_entry_has_history()
+    {
+        var torrent = new Torrent
+        {
+            Id = 7,
+            Name = "Resume",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Uploaded = 100,
+            Downloaded = 100,
+            TotalSize = 100,
+            Status = TorrentStatus.Seeding
+        };
+        var entry = new TrackerEntry
+        {
+            Id = 3,
+            TorrentId = 7,
+            Url = "http://127.0.0.1:6969/announce",
+            Enabled = true,
+            TotalAnnounces = 4,
+            SuccessfulAnnounces = 4,
+            LastAnnounce = DateTime.UtcNow.AddHours(-2),
+            NextAnnounce = DateTime.UtcNow.AddMinutes(-1),
+            AnnounceInterval = 1800,
+            MinAnnounceInterval = 60
+        };
+        _trackerEntryService.GetByTorrentId(7).Returns(new List<TrackerEntry> { entry });
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true, Complete = 1, Incomplete = 0, Interval = 1800, MinInterval = 60 });
+
+        _service.AnnounceTorrent(torrent, force: true);
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(request => request.Event == AnnounceEvent.Started),
+            Arg.Any<List<List<string>>>());
+
+        _multiTracker.ClearReceivedCalls();
+        _service.AnnounceTorrent(torrent, force: true);
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(request => request.Event == AnnounceEvent.None),
+            Arg.Any<List<List<string>>>());
+
+        _service.AnnounceTorrent(torrent, force: true, eventType: AnnounceEvent.Stopped);
+        _multiTracker.ClearReceivedCalls();
+        _service.AnnounceTorrent(torrent, force: true);
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(request => request.Event == AnnounceEvent.Started),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void Session_start_helpers_ignore_missing_entries_and_blank_urls()
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var needs = typeof(TrackerAnnounceService).GetMethod("NeedsSessionStart", flags);
+        var remember = typeof(TrackerAnnounceService).GetMethod("RememberSessionStart", flags);
+        var forget = typeof(TrackerAnnounceService).GetMethod("ForgetSessionStart", flags);
+
+        Assert.That((bool)needs.Invoke(_service, new object[] { null }), Is.False);
+        Assert.DoesNotThrow(() => remember.Invoke(_service, new object[] { null }));
+        Assert.DoesNotThrow(() => remember.Invoke(_service, new object[] { new TrackerEntry { TorrentId = 1, Url = "   " } }));
+        Assert.DoesNotThrow(() => forget.Invoke(_service, new object[] { null }));
+        Assert.DoesNotThrow(() => forget.Invoke(_service, new object[] { new TrackerEntry { TorrentId = 1, Url = string.Empty } }));
+    }
+
+    [Test]
+    public void AnnounceTracker_stopped_clears_the_session_start_flag()
+    {
+        var torrent = new Torrent
+        {
+            Id = 11,
+            Name = "Single",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Uploaded = 10,
+            Downloaded = 10,
+            TotalSize = 10,
+            Status = TorrentStatus.Seeding
+        };
+        var entry = new TrackerEntry
+        {
+            Id = 11,
+            TorrentId = 11,
+            Url = "http://127.0.0.1:6970/announce",
+            Enabled = true,
+            TotalAnnounces = 3,
+            LastAnnounce = DateTime.UtcNow.AddHours(-3)
+        };
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true, Complete = 1, Incomplete = 0, Interval = 1800, MinInterval = 60 });
+
+        var stopped = _service.AnnounceTracker(torrent, entry, force: true, eventType: AnnounceEvent.Stopped);
+        Assert.That(stopped.Success, Is.True);
+        _multiTracker.Received().Announce(
+            Arg.Is<TrackerAnnounceRequest>(request => request.Event == AnnounceEvent.Stopped),
+            Arg.Any<List<List<string>>>());
+
+        _multiTracker.ClearReceivedCalls();
+        var restarted = _service.AnnounceTracker(torrent, entry, force: true);
+        Assert.That(restarted.Success, Is.True);
+        _multiTracker.Received().Announce(
+            Arg.Is<TrackerAnnounceRequest>(request => request.Event == AnnounceEvent.Started),
+            Arg.Any<List<List<string>>>());
     }
 }
