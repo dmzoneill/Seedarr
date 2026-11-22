@@ -3738,7 +3738,7 @@ public class DhtServiceTest
     public async Task SendGetPeersInternal_and_SendAnnouncePeer_with_null_target_does_not_throw()
     {
         SetUdpClient();
-        await         Assert.DoesNotThrowAsync(async () => await _service.SendAnnouncePeer(null, new byte[20], 6881, new byte[4]));
+        await Assert.DoesNotThrowAsync(async () => await _service.SendAnnouncePeer(null, new byte[20], 6881, new byte[4]));
     }
 
     [Test]
