@@ -117,6 +117,55 @@ public class PeerServerTest
         _server?.Dispose();
     }
 
+    [Test]
+    public void ConfigSaved_resizes_live_connection_limits()
+    {
+        _configService.MaxGlobalConnections.Returns(2);
+        _configService.MaximumHalfOpenConnections.Returns(3);
+        var server = new PeerServer(_configService, _torrentService, _connectionManager, _peerDiscovery, _multiTracker, mseSkeyRegistry: _mseSkeyRegistry);
+
+        Assert.That(GetConnectionSemaphore(server).CurrentCount, Is.EqualTo(2));
+        Assert.That(GetHalfOpenSemaphore(server).CurrentCount, Is.EqualTo(3));
+
+        _configService.MaxGlobalConnections.Returns(7);
+        _configService.MaximumHalfOpenConnections.Returns(9);
+        server.Handle(new ConfigSavedEvent());
+
+        Assert.That(GetConnectionSemaphore(server).CurrentCount, Is.EqualTo(7));
+        Assert.That(GetHalfOpenSemaphore(server).CurrentCount, Is.EqualTo(9));
+        server.Dispose();
+    }
+
+    [Test]
+    public async Task Dispose_does_not_fault_a_handshake_that_still_releases_its_slot()
+    {
+        var (clientTcp, serverTcp) = CreateRawTcpPair();
+        _clients.Add(clientTcp);
+
+        var halfOpen = GetHalfOpenSemaphore();
+        var initial = halfOpen.CurrentCount;
+        using var cts = new CancellationTokenSource();
+        var task = InvokeProcessIncomingClientAsync(serverTcp, cts.Token);
+
+        for (var i = 0; i < 50 && halfOpen.CurrentCount == initial; i++)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.That(halfOpen.CurrentCount, Is.LessThan(initial));
+
+        _server.Dispose();
+        clientTcp.Close();
+
+        var completed = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(3)));
+        Assert.That(completed, Is.SameAs(task), "handshake worker did not finish after dispose");
+        Assert.That(task.IsFaulted, Is.False);
+        if (task.IsFaulted)
+        {
+            Assert.Fail(task.Exception?.ToString());
+        }
+    }
+
     private PeerConnection CreateTestConnection()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
