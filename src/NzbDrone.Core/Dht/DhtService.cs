@@ -386,6 +386,8 @@ public class DhtService : BackgroundService, IDisposable, IDhtService,
             var hadClient = _udpClient != null;
             Dispose(true);
 
+            _recentlyProbed.Clear();
+
             if (hadClient)
             {
                 _boundPort = 0;
@@ -1579,6 +1581,8 @@ public class DhtService : BackgroundService, IDisposable, IDhtService,
 
     private void OnPingBeforeEvict(int bucketIndex, DhtNode nodeToProbe)
     {
+        PruneRecentlyProbed(DateTime.UtcNow);
+
         if (nodeToProbe?.EndPoint == null)
         {
             return;
@@ -2220,6 +2224,19 @@ public class DhtService : BackgroundService, IDisposable, IDhtService,
             if (bucket.LastSeen < cutoff)
             {
                 _rateLimiters.TryRemove(ip, out _);
+            }
+        }
+
+        PruneRecentlyProbed(now);
+    }
+
+    private void PruneRecentlyProbed(DateTime now)
+    {
+        foreach (var (endpoint, probedAt) in _recentlyProbed)
+        {
+            if (now - probedAt > TimeSpan.FromSeconds(30))
+            {
+                _recentlyProbed.TryRemove(endpoint, out _);
             }
         }
     }
