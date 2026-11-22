@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -946,5 +947,63 @@ public class UtpManagerTest
         Assert.That(injected.ActiveConnections, Is.EqualTo(1));
         Assert.That(hosted[0].ActiveConnections, Is.EqualTo(1));
         accepted.Dispose();
+    }
+
+    [Test]
+    public void OnConnected_with_no_remote_endpoint_does_not_add_demux_keys()
+    {
+        using var conn = (UtpConnection)_subject.CreateConnection();
+        var before = ActiveConnectionMap().Count;
+
+        conn.OnConnected?.Invoke(conn);
+
+        Assert.That(ActiveConnectionMap().Count, Is.EqualTo(before));
+    }
+
+    [Test]
+    public void RegisterEndpointKeys_ignores_missing_endpoint_callback_or_connection()
+    {
+        var method = typeof(UtpManager).GetMethod("RegisterEndpointKeys", BindingFlags.NonPublic | BindingFlags.Static);
+        using var conn = new UtpConnection(5);
+        var endpoint = new IPEndPoint(IPAddress.Loopback, 1);
+        var keys = new List<string>();
+
+        Assert.DoesNotThrow(() => method.Invoke(null, new object[] { null, endpoint, conn }));
+        Assert.DoesNotThrow(() => method.Invoke(null, new object[] { (Action<string>)keys.Add, null, conn }));
+        Assert.DoesNotThrow(() => method.Invoke(null, new object[] { (Action<string>)keys.Add, endpoint, null }));
+        Assert.That(keys, Is.Empty);
+
+        method.Invoke(null, new object[] { (Action<string>)keys.Add, endpoint, conn });
+        Assert.That(keys, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public void FindConnection_uses_neighbor_ids_and_rejects_a_null_sender()
+    {
+        RetainAcceptedConnections();
+        var syn = new byte[20];
+        syn[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        syn[2] = 0x01;
+        syn[3] = 0x01;
+        var sender = new IPEndPoint(IPAddress.Parse("10.8.8.8"), 4800);
+        InvokeHandleIncoming(syn, sender);
+
+        var find = typeof(UtpManager).GetMethod("FindConnection", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.That(find.Invoke(_subject, new object[] { null, (ushort)1 }), Is.Null);
+
+        var higher = new byte[20];
+        higher[0] = (byte)(((byte)UtpPacketType.State) << 4 | 1);
+        higher[2] = 0x01;
+        higher[3] = 0x03;
+        Assert.DoesNotThrow(() => InvokeHandleIncoming(higher, sender));
+
+        var lower = new byte[20];
+        lower[0] = (byte)(((byte)UtpPacketType.State) << 4 | 1);
+        lower[2] = 0x01;
+        lower[3] = 0x00;
+        Assert.DoesNotThrow(() => InvokeHandleIncoming(lower, sender));
+
+        var demux = typeof(UtpManager).GetMethod("DemuxKey", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.That(demux.Invoke(null, new object[] { null, (ushort)7 }), Is.EqualTo("_7"));
     }
 }
