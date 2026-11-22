@@ -31,8 +31,6 @@ public class NotificationEventHandler :
     IHandle<BackupFailedEvent>,
     IDisposable
 {
-    private static readonly TimeSpan DispatchWaitTimeout = TimeSpan.FromSeconds(15);
-
     private readonly INotificationRepository _notificationRepository;
     private readonly IWebhookDispatcher _webhookDispatcher;
     private readonly ICustomScriptService _customScriptService;
@@ -43,7 +41,9 @@ public class NotificationEventHandler :
     private readonly IEpisodicParser _episodicParser;
     private readonly SemaphoreSlim _dispatchSemaphore;
     private readonly CancellationTokenSource _dispatchShutdown = new();
+    private readonly TimeSpan _dispatchWaitTimeout;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+    private int _dispatchShutdownDisposed;
 
     public SemaphoreSlim DispatchSemaphore => _dispatchSemaphore;
 
@@ -56,7 +56,8 @@ public class NotificationEventHandler :
         ITorrentRepository torrentRepository = null,
         ITorrentFileRepository torrentFileRepository = null,
         IEpisodicParser episodicParser = null,
-        int maxConcurrentDispatches = 10)
+        int maxConcurrentDispatches = 10,
+        TimeSpan? dispatchWaitTimeout = null)
     {
         _notificationRepository = notificationRepository;
         _webhookDispatcher = webhookDispatcher;
@@ -67,6 +68,7 @@ public class NotificationEventHandler :
         _torrentFileRepository = torrentFileRepository;
         _episodicParser = episodicParser ?? new EpisodicParser();
         _dispatchSemaphore = new SemaphoreSlim(maxConcurrentDispatches, maxConcurrentDispatches);
+        _dispatchWaitTimeout = dispatchWaitTimeout ?? TimeSpan.FromSeconds(15);
     }
 
     public void Handle(TorrentAddedEvent message)
@@ -311,14 +313,13 @@ public class NotificationEventHandler :
 
     public void Dispose()
     {
-        try
+        if (Interlocked.Exchange(ref _dispatchShutdownDisposed, 1) != 0)
         {
-            _dispatchShutdown.Cancel();
+            return;
         }
-        catch (ObjectDisposedException)
-        {
-            // Already disposed.
-        }
+
+        _dispatchShutdown.Cancel();
+        _dispatchShutdown.Dispose();
 
         // Do not dispose the semaphore here. Waiters blocked in WaitAsync throw
         // ObjectDisposedException if it is disposed before they observe cancellation.
@@ -418,7 +419,7 @@ public class NotificationEventHandler :
             var acquired = false;
             try
             {
-                acquired = await _dispatchSemaphore.WaitAsync(DispatchWaitTimeout, _dispatchShutdown.Token).ConfigureAwait(false);
+                acquired = await _dispatchSemaphore.WaitAsync(_dispatchWaitTimeout, _dispatchShutdown.Token).ConfigureAwait(false);
                 if (!acquired)
                 {
                     _logger.Warn("Dropping {0} notification for {1}: dispatch slots stayed busy", implementation, eventType);

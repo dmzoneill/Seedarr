@@ -780,7 +780,10 @@ public class NotificationEventHandlerTest
             "OnGrab",
             "Webhook");
 
-        Assert.That(await Task.WhenAny(entered.Task, Task.Delay(2000)), Is.SameAs(entered.Task));
+        using var enteredDelay = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var enteredWait = Task.Delay(Timeout.Infinite, enteredDelay.Token);
+        Assert.That(await Task.WhenAny(entered.Task, enteredWait), Is.SameAs(entered.Task));
+        enteredDelay.Cancel();
 
         var ran = false;
         var second = handler.EnqueueDispatch(
@@ -794,14 +797,56 @@ public class NotificationEventHandlerTest
 
         await Task.Delay(50);
         handler.Dispose();
+        handler.Dispose();
 
-        var finished = await Task.WhenAny(second, Task.Delay(2000));
+        using var finishedDelay = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var finishedWait = Task.Delay(Timeout.Infinite, finishedDelay.Token);
+        var finished = await Task.WhenAny(second, finishedWait);
+        finishedDelay.Cancel();
         Assert.That(finished, Is.SameAs(second));
         Assert.DoesNotThrow(() => second.GetAwaiter().GetResult());
         Assert.That(ran, Is.False);
 
         release.TrySetResult();
         await first;
+    }
+
+    [Test]
+    public async Task EnqueueDispatch_drops_the_notification_when_slots_stay_busy()
+    {
+        var handler = new NotificationEventHandler(
+            _notificationRepository,
+            _webhookDispatcher,
+            _customScriptService,
+            maxConcurrentDispatches: 1,
+            dispatchWaitTimeout: TimeSpan.FromMilliseconds(30));
+
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = handler.EnqueueDispatch(
+            async () =>
+            {
+                entered.TrySetResult();
+                await release.Task.ConfigureAwait(false);
+            },
+            "OnGrab",
+            "Webhook");
+        Assert.That(entered.Task.Wait(TimeSpan.FromSeconds(2)), Is.True);
+
+        var ran = false;
+        await handler.EnqueueDispatch(
+            () =>
+            {
+                ran = true;
+                return Task.CompletedTask;
+            },
+            "OnGrab",
+            "Webhook");
+
+        Assert.That(ran, Is.False);
+        release.TrySetResult();
+        await first;
+        handler.Dispose();
     }
 
     private static void AssertTimeout(Type type)

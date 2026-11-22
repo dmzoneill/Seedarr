@@ -433,14 +433,14 @@ public class TelegramUpdateHandler : ITelegramUpdateHandler
     private static TelegramResponse HandleStart(long chatId)
     {
         var text = "<b>Seedarr Telegram Bot</b>\n\n" +
-                   "Status: <b>Authorized</b> ✅\n\n" +
-                   "<b>Available Commands:</b>\n" +
-                   "/status — View speeds, torrent counts & disk space\n" +
-                   "/torrents — List active torrents with progress\n" +
-                   "/pause &lt;id&gt; — Pause a torrent\n" +
-                   "/resume &lt;id&gt; — Resume a torrent\n" +
-                   "/turtle — Toggle alternate speed mode\n" +
-                   "/start — Show this help message";
+                    "Status: <b>Authorized</b> ✅\n\n" +
+                    "<b>Available Commands:</b>\n" +
+                    "/status — View speeds, torrent counts & disk space\n" +
+                    "/torrents — List active torrents with progress\n" +
+                    "/pause &lt;id&gt; — Pause a torrent\n" +
+                    "/resume &lt;id&gt; — Resume a torrent\n" +
+                    "/turtle — Toggle alternate speed mode\n" +
+                    "/start — Show this help message";
 
         return new TelegramResponse
         {
