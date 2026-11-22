@@ -1405,6 +1405,48 @@ public class UtpConnection : IUtpConnection
         return (ushort)(ackSeq - packetSeq) < 32768;
     }
 
+    public void Abort()
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        _isDisposed = true;
+        _isClosing = false;
+        IsConnected = false;
+
+        lock (_receiveLock)
+        {
+            _outOfOrderBuffer.Clear();
+            _receiveQueue.Clear();
+            Monitor.PulseAll(_receiveLock);
+        }
+
+        _ackReceivedEvent.Set();
+
+        if (_ownsUdpClient)
+        {
+            try
+            {
+                _udpClient.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error disposing UDP client during abort");
+            }
+        }
+
+        try
+        {
+            OnClosed?.Invoke(this);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Error invoking OnClosed callback");
+        }
+    }
+
     public void Dispose()
     {
         if (_isDisposed)

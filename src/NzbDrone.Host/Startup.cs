@@ -258,16 +258,28 @@ public class Startup
 
     public static void RegisterBackgroundHostedServices(IServiceCollection services)
     {
-        foreach (var type in KnownTypes.GetImplementations(typeof(BackgroundService)))
-        {
-            var addMethod = typeof(ServiceCollectionHostedServiceExtensions)
-                .GetMethods(BindingFlags.Public | BindingFlags.Static)
-                .First(m =>
-                    m.Name == nameof(ServiceCollectionHostedServiceExtensions.AddHostedService)
-                    && m.IsGenericMethodDefinition
-                    && m.GetParameters().Length == 1);
+        RegisterBackgroundHostedServices(services, KnownTypes.GetImplementations(typeof(BackgroundService)));
+    }
 
-            addMethod.MakeGenericMethod(type).Invoke(null, new object[] { services });
+    internal static void RegisterBackgroundHostedServices(IServiceCollection services, IEnumerable<Type> backgroundServiceTypes)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        if (backgroundServiceTypes == null)
+        {
+            return;
+        }
+
+        foreach (var type in backgroundServiceTypes)
+        {
+            if (type == null || !typeof(IHostedService).IsAssignableFrom(type))
+            {
+                continue;
+            }
+
+            // Resolve the DryIoc singleton instead of AddHostedService<T>(), which constructs a second instance.
+            var implementationType = type;
+            services.AddSingleton(typeof(IHostedService), sp => (IHostedService)sp.GetRequiredService(implementationType));
         }
     }
 

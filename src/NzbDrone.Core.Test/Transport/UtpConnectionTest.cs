@@ -3188,4 +3188,37 @@ public class UtpConnectionTest
         Assert.That(bytesRead, Is.EqualTo(0));
         Assert.That(sharedUdp.Client.Available, Is.GreaterThan(0));
     }
+
+    [Test]
+    public void Abort_is_idempotent_and_survives_close_callback_failures()
+    {
+        using var connection = new UtpConnection();
+        connection.OnClosed += _ => throw new InvalidOperationException("close failed");
+
+        Assert.DoesNotThrow(() => connection.Abort());
+        Assert.That(connection.IsConnected, Is.False);
+        Assert.DoesNotThrow(() => connection.Abort());
+    }
+
+    [Test]
+    public void Abort_logs_and_continues_when_disposing_the_socket_fails()
+    {
+        var connection = new UtpConnection();
+        var udpField = typeof(UtpConnection).GetField("_udpClient", BindingFlags.NonPublic | BindingFlags.Instance);
+        var ownsField = typeof(UtpConnection).GetField("_ownsUdpClient", BindingFlags.NonPublic | BindingFlags.Instance);
+        udpField.SetValue(connection, new ThrowingUdpClient());
+        ownsField.SetValue(connection, true);
+
+        Assert.DoesNotThrow(() => connection.Abort());
+        Assert.DoesNotThrow(() => connection.Abort());
+    }
+
+    private sealed class ThrowingUdpClient : UdpClient
+    {
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            throw new InvalidOperationException("dispose failed");
+        }
+    }
 }
