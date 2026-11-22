@@ -744,12 +744,12 @@ public class PeerBlocklistSyncServiceTests
         var ipNeverBlocked = IPAddress.Parse("8.8.8.8");
 
         var readerErrors = 0;
-        var readerIterations = 0;
+        var readerIterations = 0L;
 
         // Start multiple reader tasks hammering IsBlocked
         var readerTasks = Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
         {
-            var count = 0;
+            var count = 0L;
             while (!token.IsCancellationRequested)
             {
                 try
