@@ -973,14 +973,17 @@ public class PeerConnection : IDisposable
 
     private async Task<int> ReadFirstByteWithHandshakeTimeoutAsync(byte[] peek, CancellationToken cancellationToken)
     {
-        if (HandshakeTimeoutMs <= 0)
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (HandshakeTimeoutMs > 0)
         {
-            return await _networkStream.ReadAsync(peek.AsMemory(0, 1), cancellationToken);
+            timeoutCts.CancelAfter(HandshakeTimeoutMs);
         }
 
-        var readTask = Task.Run(() => _networkStream.Read(peek, 0, 1), cancellationToken);
-        var completed = await Task.WhenAny(readTask, Task.Delay(HandshakeTimeoutMs, cancellationToken));
-        if (completed != readTask)
+        try
+        {
+            return await _networkStream.ReadAsync(peek.AsMemory(0, 1), timeoutCts.Token);
+        }
+        catch (OperationCanceledException)
         {
             try
             {
@@ -993,8 +996,6 @@ public class PeerConnection : IDisposable
 
             return 0;
         }
-
-        return await readTask;
     }
 
     public bool NegotiateEncryptionIncoming(IMseSkeyRegistry skeyRegistry, EncryptionMode mode)
@@ -1132,6 +1133,20 @@ public class PeerConnection : IDisposable
 
     public bool ReceiveHandshake(int? expectedHashLength = null)
     {
+        return ReceiveHandshakeAsync(expectedHashLength, CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    public async Task<bool> ReceiveHandshakeAsync(int? expectedHashLength, CancellationToken cancellationToken)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (HandshakeTimeoutMs > 0)
+        {
+            // One deadline for the whole handshake. Socket.ReceiveTimeout resets after every
+            // successful read, so a peer that dribbles one byte inside that window never trips it.
+            timeoutCts.CancelAfter(HandshakeTimeoutMs);
+        }
+
+        var token = timeoutCts.Token;
         try
         {
             if (HandshakeTimeoutMs > 0)
@@ -1147,7 +1162,7 @@ public class PeerConnection : IDisposable
             }
 
             var headerBuffer = new byte[28];
-            var read = ReadExact(headerBuffer, 28);
+            var read = await ReadExactAsync(headerBuffer, 28, token);
             if (!read)
             {
                 return false;
@@ -1237,13 +1252,13 @@ public class PeerConnection : IDisposable
             }
 
             var hashBuffer = new byte[hashLength];
-            if (!ReadExact(hashBuffer, hashLength))
+            if (!await ReadExactAsync(hashBuffer, hashLength, token))
             {
                 return false;
             }
 
             var peerIdBuffer = new byte[20];
-            if (!ReadExact(peerIdBuffer, 20))
+            if (!await ReadExactAsync(peerIdBuffer, 20, token))
             {
                 return false;
             }
@@ -1262,6 +1277,10 @@ public class PeerConnection : IDisposable
             PeerId = Encoding.ASCII.GetString(peerIdBuffer);
             LastActivity = DateTime.UtcNow;
             return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
         }
         catch (Exception ex)
         {
@@ -2285,6 +2304,23 @@ public class PeerConnection : IDisposable
 
             offset += read;
             _bytesReadForCurrentMessage += read;
+        }
+
+        return true;
+    }
+
+    private async Task<bool> ReadExactAsync(byte[] buffer, int count, CancellationToken cancellationToken)
+    {
+        var offset = 0;
+        while (offset < count)
+        {
+            var read = await _activeStream.ReadAsync(buffer.AsMemory(offset, count - offset), cancellationToken);
+            if (read == 0)
+            {
+                return false;
+            }
+
+            offset += read;
         }
 
         return true;

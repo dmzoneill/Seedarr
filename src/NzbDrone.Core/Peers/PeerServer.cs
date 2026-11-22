@@ -2208,7 +2208,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
                 var supportsDht = _configService?.EnableDht ?? true;
                 connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile, supportsExtensions: true, supportsFast: supportsFast, supportsDht: supportsDht);
 
-                if (!connection.ReceiveHandshake())
+                if (!await connection.ReceiveHandshakeAsync(null, stoppingToken))
                 {
                     _logger.Debug("Outgoing handshake failed from {0}:{1}", candidate.Ip, candidate.Port);
                     _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
@@ -2666,6 +2666,8 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
     {
         connection.HandshakeTimeoutMs = UnauthenticatedHandshakeTimeoutMs;
         connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
+        using var handshakeBudget = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        handshakeBudget.CancelAfter(UnauthenticatedHandshakeTimeoutMs);
         connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;
         connection.MaxPipelinedRequests = _configService.PeerRequestCount;
         connection.IdleChance = _clientBehaviorSimulator != null
@@ -2679,15 +2681,15 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
         try
         {
             var negotiated = _mseSkeyRegistry != null
-                ? await connection.NegotiateEncryptionIncomingAsync(_mseSkeyRegistry, GetEncryptionMode(), stoppingToken)
-                : await connection.NegotiateEncryptionIncomingAsync(hash => ValidateInfoHash(hash, connection), GetEncryptionMode(), stoppingToken);
+                ? await connection.NegotiateEncryptionIncomingAsync(_mseSkeyRegistry, GetEncryptionMode(), handshakeBudget.Token)
+                : await connection.NegotiateEncryptionIncomingAsync(hash => ValidateInfoHash(hash, connection), GetEncryptionMode(), handshakeBudget.Token);
             if (!negotiated)
             {
                 _logger.Debug("Encryption negotiation failed from {0}", connection.RemoteIp);
                 return;
             }
 
-            if (!connection.ReceiveHandshake())
+            if (!await connection.ReceiveHandshakeAsync(null, handshakeBudget.Token))
             {
                 _logger.Debug("Invalid handshake from {0}", connection.RemoteIp);
                 return;
