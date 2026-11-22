@@ -42,6 +42,8 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
     private readonly Trackers.Metrics.ITrackerMetricService _trackerMetricService;
     private readonly Trackers.ITrackerAnnounceService _trackerAnnounceService;
     private readonly IClientBehaviorSimulator _clientBehaviorSimulator;
+    private readonly IClientProfileFactory _clientProfileFactory;
+    private readonly ConcurrentDictionary<string, (string PeerId, string AnnounceKey)> _ephemeralIdentities = new(StringComparer.OrdinalIgnoreCase);
     private readonly IRandomNumberGenerator _random;
     private readonly Transport.IUtpManager _utpManager;
     private readonly IVpnKillSwitchService _vpnKillSwitchService;
@@ -341,7 +343,8 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
         ITorrentFileService torrentFileService = null,
         IEndgameManager endgameManager = null,
         IEventAggregator eventAggregator = null,
-        ISuperSeedingService superSeedingService = null)
+        ISuperSeedingService superSeedingService = null,
+        IClientProfileFactory clientProfileFactory = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -386,6 +389,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
                 : null);
         _clientBehaviorSimulator = clientBehaviorSimulator;
+        _clientProfileFactory = clientProfileFactory;
         _utpManager = utpManager;
         _vpnKillSwitchService = vpnKillSwitchService;
 
@@ -2197,13 +2201,9 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
                     connection.EncryptionMethod = CryptoMethod.PlainText;
                 }
 
-                var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-                    ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
-                    : null;
-                var profile = session?.Profile ?? ((_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-                    ? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate)
-                    : null);
-                var peerId = session?.PeerId ?? profile?.GeneratePeerId() ?? "-SD1000-000000000000";
+                var identity = ResolveHandshakeIdentity(torrent);
+                var profile = identity.Profile;
+                var peerId = identity.PeerId;
                 var supportsFast = _configService?.ExtensionFastExtension ?? true;
                 var supportsDht = _configService?.EnableDht ?? true;
                 connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile, supportsExtensions: true, supportsFast: supportsFast, supportsDht: supportsDht);
@@ -2735,13 +2735,9 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
 
                 onPostHandshakeTimeout?.Invoke();
 
-                var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-                    ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
-                    : null;
-                var profile = session?.Profile ?? ((_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-                    ? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate)
-                    : null);
-                var peerId = session?.PeerId ?? profile?.GeneratePeerId() ?? "-SD1000-000000000000";
+                var identity = ResolveHandshakeIdentity(torrent);
+                var profile = identity.Profile;
+                var peerId = identity.PeerId;
                 var supportsFast = _configService?.ExtensionFastExtension ?? true;
                 var supportsDht = _configService?.EnableDht ?? true;
                 connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile, supportsExtensions: true, supportsFast: supportsFast, supportsDht: supportsDht);
@@ -3498,6 +3494,18 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
         }
 
         return false;
+    }
+
+    private TorrentWireIdentity ResolveHandshakeIdentity(Torrent torrent)
+    {
+        return TorrentWireIdentityResolver.Resolve(
+            torrent?.InfoHash,
+            torrent?.IsPrivate ?? false,
+            torrent?.ClientProfile,
+            _configService,
+            _clientBehaviorSimulator,
+            _clientProfileFactory,
+            _ephemeralIdentities);
     }
 
     private void SendExtensionHandshake(PeerConnection connection, Torrent torrent, IClientProfile profile)

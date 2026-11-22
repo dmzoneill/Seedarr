@@ -1531,6 +1531,143 @@ public class TrackerAnnounceServiceTest
     }
 
     [Test]
+    public void AnnounceTorrent_keeps_peer_id_and_key_stable_for_per_torrent_client_profile()
+    {
+        var simulator = CreateIdentitySimulator();
+        var service = CreateIdentityService(simulator);
+        var torrent = IdentityTorrent(clientProfile: "Transmission");
+        var captured = CaptureAnnounces(torrent);
+
+        service.AnnounceTorrent(torrent, force: true);
+        service.AnnounceTorrent(torrent, force: true);
+
+        AssertStableIdentity(captured, "-TR3000-", "Transmission");
+    }
+
+    [Test]
+    public void AnnounceTorrent_keeps_peer_id_and_key_stable_in_anonymous_mode()
+    {
+        _configService.AnonymousMode.Returns(true);
+        _configService.ClientBehaviorEngineEnabled.Returns(true);
+        _configService.PrimaryClient.Returns("Transmission");
+
+        var simulator = CreateIdentitySimulator();
+        var service = CreateIdentityService(simulator);
+        var torrent = IdentityTorrent();
+        var captured = CaptureAnnounces(torrent);
+
+        service.AnnounceTorrent(torrent, force: true);
+        service.AnnounceTorrent(torrent, force: true);
+
+        AssertStableIdentity(captured, "-TR3000-", "Transmission");
+        Assert.That(captured[0].PeerId, Is.Not.EqualTo("-SD1000-000000000000"));
+    }
+
+    [Test]
+    public void AnnounceTorrent_keeps_peer_id_and_key_stable_when_only_user_agent_selects_the_profile()
+    {
+        _configService.ClientBehaviorEngineEnabled.Returns(false);
+        _configService.AnonymousMode.Returns(false);
+        _configService.BitTorrentUserAgent.Returns("Transmission/3.00");
+
+        var simulator = CreateIdentitySimulator();
+        var service = CreateIdentityService(simulator);
+        var torrent = IdentityTorrent();
+        var captured = CaptureAnnounces(torrent);
+
+        service.AnnounceTorrent(torrent, force: true);
+        service.AnnounceTorrent(torrent, force: true);
+
+        AssertStableIdentity(captured, "-TR3000-", "Transmission");
+        Assert.That(captured[0].UserAgent, Is.EqualTo("Transmission/3.00"));
+    }
+
+    [Test]
+    public void AnnounceTorrent_peer_ids_differ_between_torrents_and_are_not_the_hardcoded_seedarr_id()
+    {
+        var simulator = CreateIdentitySimulator();
+        var service = CreateIdentityService(simulator);
+        var first = IdentityTorrent(id: 301, infoHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        var second = IdentityTorrent(id: 302, infoHash: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        var captured = CaptureAnnounces(first, second);
+
+        service.AnnounceTorrent(first, force: true);
+        service.AnnounceTorrent(second, force: true);
+
+        Assert.That(captured[0].PeerId, Is.Not.EqualTo(captured[1].PeerId));
+        Assert.That(captured[0].PeerId, Does.Not.StartWith("-SD1000-"));
+        Assert.That(captured[1].PeerId, Does.Not.StartWith("-SD1000-"));
+        Assert.That(captured[0].PeerId, Has.Length.EqualTo(20));
+        Assert.That(captured[1].PeerId, Has.Length.EqualTo(20));
+    }
+
+    private ClientBehaviorSimulator CreateIdentitySimulator()
+    {
+        var factory = Substitute.For<IClientProfileFactory>();
+        factory.GetAvailableProviders().Returns(new List<IClientProfile>());
+        return new ClientBehaviorSimulator(_configService, factory);
+    }
+
+    private TrackerAnnounceService CreateIdentityService(IClientBehaviorSimulator simulator)
+    {
+        return new TrackerAnnounceService(
+            _trackerEntryService,
+            _multiTracker,
+            _peerDiscovery,
+            _eventLogService,
+            _configService,
+            _trackerMetricService,
+            eventAggregator: _eventAggregator,
+            torrentService: _torrentService,
+            clientBehaviorSimulator: simulator,
+            vpnKillSwitchService: _vpnKillSwitchService);
+    }
+
+    private static Torrent IdentityTorrent(int id = 300, string infoHash = "abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde", string clientProfile = null)
+    {
+        return new Torrent
+        {
+            Id = id,
+            Name = "Identity.Torrent",
+            InfoHash = infoHash,
+            ClientProfile = clientProfile,
+            Status = TorrentStatus.Seeding,
+            TotalSize = 1000,
+            Uploaded = 10,
+            Downloaded = 1000
+        };
+    }
+
+    private List<TrackerAnnounceRequest> CaptureAnnounces(params Torrent[] torrents)
+    {
+        foreach (var torrent in torrents)
+        {
+            _trackerEntryService.GetByTorrentId(torrent.Id).Returns(new List<TrackerEntry>
+            {
+                new() { Id = torrent.Id, TorrentId = torrent.Id, Url = "http://127.0.0.1:6969/announce", Enabled = true }
+            });
+        }
+
+        var captured = new List<TrackerAnnounceRequest>();
+        _multiTracker.Announce(Arg.Do<TrackerAnnounceRequest>(captured.Add), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+        return captured;
+    }
+
+    private static void AssertStableIdentity(List<TrackerAnnounceRequest> captured, string peerPrefix, string profileNamePart)
+    {
+        Assert.That(captured, Has.Count.EqualTo(2));
+        Assert.That(captured[0].PeerId, Is.EqualTo(captured[1].PeerId));
+        Assert.That(captured[0].Key, Is.EqualTo(captured[1].Key));
+        Assert.That(captured[0].PeerId, Does.StartWith(peerPrefix));
+        Assert.That(captured[0].PeerId, Has.Length.EqualTo(20));
+        Assert.That(captured[0].Key, Has.Length.EqualTo(8));
+        Assert.That(captured[0].UserAgent, Does.Contain(profileNamePart));
+        Assert.That(captured[0].ClientProfile.Name, Does.Contain(profileNamePart));
+        Assert.That(captured[1].ClientProfile.Name, Does.Contain(profileNamePart));
+    }
+
+    [Test]
     public void IsLoopbackOrMockTracker_should_correctly_identify_loopback_and_external_urls()
     {
         Assert.That(TrackerAnnounceService.IsLoopbackOrMockTracker("http://127.0.0.1:1337/announce"), Is.True);

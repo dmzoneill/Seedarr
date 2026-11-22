@@ -590,4 +590,38 @@ public class ClientBehaviorSimulatorTest
         Assert.That(session3.ProfileName, Is.Not.EqualTo(session2.ProfileName),
             "New session created after dwell cooldown may switch to alternate profile");
     }
+
+    [Test]
+    public void GetOrCreateSession_pinned_profile_keeps_the_same_peer_id_and_announce_key()
+    {
+        var profile = Substitute.For<IClientProfile>();
+        profile.Name.Returns("Transmission 3.00");
+        profile.GeneratePeerId().Returns("-TR3000-111111111111", "-TR3000-222222222222");
+
+        var infoHash = "0123456789ABCDEF0123456789ABCDEF01234567";
+        var first = _simulator.GetOrCreateSession(infoHash, isPrivateTorrent: false, pinnedProfile: profile);
+        var second = _simulator.GetOrCreateSession(infoHash, isPrivateTorrent: false, pinnedProfile: profile);
+
+        Assert.That(second, Is.SameAs(first));
+        Assert.That(second.PeerId, Is.EqualTo("-TR3000-111111111111"));
+        Assert.That(second.AnnounceKey, Is.EqualTo(first.AnnounceKey));
+        Assert.That(second.ProfileName, Is.EqualTo("Transmission 3.00"));
+    }
+
+    [Test]
+    public void GetOrCreateSession_explicit_pin_wins_over_private_primary_client_pin()
+    {
+        _configService.PrimaryClient.Returns("qBittorrent");
+        var profile = Substitute.For<IClientProfile>();
+        profile.Name.Returns("Transmission 3.00");
+        profile.GeneratePeerId().Returns("-TR3000-333333333333", "-TR3000-444444444444");
+
+        var infoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd";
+        var session = _simulator.GetOrCreateSession(infoHash, isPrivateTorrent: true, pinnedProfile: profile);
+        var again = _simulator.GetOrCreateSession(infoHash, isPrivateTorrent: true, pinnedProfile: profile);
+
+        Assert.That(session.ProfileName, Is.EqualTo("Transmission 3.00"));
+        Assert.That(again.PeerId, Is.EqualTo("-TR3000-333333333333"));
+        Assert.That(again.AnnounceKey, Is.EqualTo(session.AnnounceKey));
+    }
 }

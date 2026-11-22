@@ -14,7 +14,7 @@ namespace NzbDrone.Core.Simulation.ClientBehavior;
 public interface IClientBehaviorSimulator
 {
     IClientProfile GetActiveProfile(bool isPrivateTorrent = false);
-    TorrentClientSession GetOrCreateSession(string infoHash, bool isPrivateTorrent = false);
+    TorrentClientSession GetOrCreateSession(string infoHash, bool isPrivateTorrent = false, IClientProfile pinnedProfile = null);
     IClientProfile GetProfileForTorrent(string infoHash, bool isPrivateTorrent = false);
     TorrentClientSession GetSession(string infoHash);
     bool ReleaseSession(string infoHash);
@@ -101,11 +101,11 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
         }
     }
 
-    public TorrentClientSession GetOrCreateSession(string infoHash, bool isPrivateTorrent = false)
+    public TorrentClientSession GetOrCreateSession(string infoHash, bool isPrivateTorrent = false, IClientProfile pinnedProfile = null)
     {
         if (string.IsNullOrWhiteSpace(infoHash))
         {
-            var fallbackProfile = isPrivateTorrent ? GetDefaultProfile() : GetActiveProfile(isPrivateTorrent);
+            var fallbackProfile = pinnedProfile ?? (isPrivateTorrent ? GetDefaultProfile() : GetActiveProfile(isPrivateTorrent));
             return new TorrentClientSession
             {
                 ProfileName = fallbackProfile?.Name ?? string.Empty,
@@ -120,6 +120,12 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
         {
             if (_sessions.TryGetValue(infoHash, out var existingSession))
             {
+                if (pinnedProfile != null)
+                {
+                    ApplyPinnedProfile(existingSession, pinnedProfile);
+                    return existingSession;
+                }
+
                 if (isPrivateTorrent)
                 {
                     var defaultProfile = GetDefaultProfile();
@@ -138,7 +144,11 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
 
             IClientProfile profile;
 
-            if (isPrivateTorrent)
+            if (pinnedProfile != null)
+            {
+                profile = pinnedProfile;
+            }
+            else if (isPrivateTorrent)
             {
                 _logger.Trace("Private torrent detected for session {0}: suppressing client identity rotation and locking to primary client", infoHash);
                 profile = GetDefaultProfile();
@@ -183,6 +193,27 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
                 session.AnnounceKey);
 
             return session;
+        }
+    }
+
+    private void ApplyPinnedProfile(TorrentClientSession session, IClientProfile pinnedProfile)
+    {
+        var pinnedName = pinnedProfile.Name ?? string.Empty;
+        var sameProfile = string.Equals(session.ProfileName, pinnedName, StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrEmpty(session.PeerId);
+
+        session.Profile = pinnedProfile;
+        session.ProfileName = pinnedName;
+
+        if (!sameProfile)
+        {
+            session.PeerId = pinnedProfile.GeneratePeerId();
+            _logger.Debug("Pinned client identity session to profile {0} (PeerId: {1})", pinnedName, session.PeerId);
+        }
+
+        if (string.IsNullOrEmpty(session.AnnounceKey))
+        {
+            session.AnnounceKey = GenerateAnnounceKey();
         }
     }
 
