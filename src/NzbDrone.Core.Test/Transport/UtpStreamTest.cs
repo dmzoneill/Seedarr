@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
@@ -204,7 +206,7 @@ public class UtpStreamTest
     public void Read_WhenDataAvailable_ReturnsBytesRead()
     {
         _connection.IsConnected.Returns(true);
-        _connection.Receive(Arg.Any<byte[]>(), Arg.Any<int>(), Arg.Any<int>()).Returns(42);
+        _connection.Receive(Arg.Any<byte[]>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>()).Returns(42);
 
         var bytesRead = _stream.Read(new byte[100], 0, 100);
 
@@ -217,21 +219,29 @@ public class UtpStreamTest
         _connection.IsConnected.Returns(true);
         _stream.ReadTimeout = 50;
 
-        _connection.Receive(Arg.Any<byte[]>(), Arg.Any<int>(), Arg.Any<int>())
+        var observedTimeout = -2;
+        _connection.Receive(Arg.Any<byte[]>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>())
             .Returns(x =>
             {
-                Thread.Sleep(150);
-                return 10;
+                observedTimeout = x.ArgAt<int>(3);
+                if (observedTimeout > 0)
+                {
+                    Thread.Sleep(observedTimeout);
+                }
+
+                return 0;
             });
 
         Assert.Throws<TimeoutException>(() => _ = _stream.Read(new byte[100], 0, 100));
+        Assert.That(observedTimeout, Is.EqualTo(50));
+        Assert.That(() => _connection.DidNotReceive().Receive(Arg.Any<byte[]>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Is<int>(t => t <= 0)), Throws.Nothing);
     }
 
     [Test]
     public async Task ReadAsync_WhenDataAvailable_ReturnsBytesRead()
     {
         _connection.IsConnected.Returns(true);
-        _connection.Receive(Arg.Any<byte[]>(), Arg.Any<int>(), Arg.Any<int>()).Returns(25);
+        _connection.Receive(Arg.Any<byte[]>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>()).Returns(25);
 
 #pragma warning disable CA1835
         var bytesRead = await _stream.ReadAsync(new byte[100], 0, 100);
@@ -244,7 +254,7 @@ public class UtpStreamTest
     public async Task ReadAsync_Memory_ReturnsBytesRead()
     {
         _connection.IsConnected.Returns(true);
-        _connection.Receive(Arg.Any<byte[]>(), Arg.Any<int>(), Arg.Any<int>()).Returns(20);
+        _connection.Receive(Arg.Any<byte[]>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>()).Returns(20);
 
         var memory = new Memory<byte>(new byte[100]);
         var bytesRead = await _stream.ReadAsync(memory);
@@ -288,5 +298,120 @@ public class UtpStreamTest
         Assert.Throws<ArgumentOutOfRangeException>(() => _stream.Write(new byte[10], -1, 5));
         Assert.Throws<ArgumentOutOfRangeException>(() => _stream.Write(new byte[10], 0, -1));
         Assert.Throws<ArgumentException>(() => _stream.Write(new byte[10], 5, 10));
+    }
+
+    [Test]
+    public async Task Read_timeout_does_not_keep_receive_running_or_drop_the_next_bytes()
+    {
+        var connection = new HoldingConnection();
+        using var stream = new UtpStream(connection) { ReadTimeout = 150 };
+        var first = new byte[8];
+
+        await Assert.ThatAsync(() => Task.Run(() => stream.Read(first, 0, first.Length)), Throws.TypeOf<TimeoutException>());
+        Assert.That(connection.ActiveReceives, Is.EqualTo(0));
+
+        var pooled = System.Buffers.ArrayPool<byte>.Shared.Rent(8);
+        try
+        {
+            Array.Fill(pooled, (byte)0x5A);
+            connection.Deliver(new byte[] { 0, 0, 0, 1, 2 });
+            await Task.Delay(50);
+            Assert.That(pooled.Take(5).ToArray(), Is.EqualTo(new byte[] { 0x5A, 0x5A, 0x5A, 0x5A, 0x5A }));
+
+            var second = new byte[8];
+            var read = stream.Read(second, 0, second.Length);
+            Assert.That(read, Is.EqualTo(5));
+            Assert.That(second.Take(5).ToArray(), Is.EqualTo(new byte[] { 0, 0, 0, 1, 2 }));
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(pooled);
+        }
+    }
+
+    private sealed class HoldingConnection : IUtpConnection
+    {
+        private readonly ManualResetEventSlim _data = new(false);
+        private byte[] _pending = Array.Empty<byte>();
+        private int _offset;
+
+        public int ActiveReceives;
+
+        public bool IsConnected { get; private set; } = true;
+
+        public IPEndPoint RemoteEndPoint => new(IPAddress.Loopback, 1);
+
+        public ushort ReceiveId => 1;
+
+        public ushort SendId => 2;
+
+        public long UploadRateLimit { get; set; }
+
+        public long DownloadRateLimit { get; set; }
+
+        public int PacketPacingIntervalMicroseconds { get; set; }
+
+        public int SendBufferSize { get; set; }
+
+        public int ReceiveBufferSize { get; set; }
+
+        public void Deliver(byte[] data)
+        {
+            _pending = data;
+            _offset = 0;
+            _data.Set();
+        }
+
+        public void Connect(IPEndPoint endpoint)
+        {
+        }
+
+        public int Send(byte[] data, int offset, int length) => length;
+
+        public int Receive(byte[] buffer, int offset, int length, int timeoutMs = -1)
+        {
+            Interlocked.Increment(ref ActiveReceives);
+            try
+            {
+                var wait = timeoutMs > 0 ? timeoutMs : 30000;
+                if (!_data.Wait(wait))
+                {
+                    return 0;
+                }
+
+                var count = Math.Min(length, _pending.Length - _offset);
+                if (count <= 0)
+                {
+                    return 0;
+                }
+
+                Buffer.BlockCopy(_pending, _offset, buffer, offset, count);
+                _offset += count;
+                if (_offset >= _pending.Length)
+                {
+                    _data.Reset();
+                }
+
+                return count;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref ActiveReceives);
+            }
+        }
+
+        public Stream GetStream() => throw new NotSupportedException();
+
+        public void Flush()
+        {
+        }
+
+        public void Close() => IsConnected = false;
+
+        public void UpdateSocketBuffers()
+        {
+        }
+
+        public void Dispose() => IsConnected = false;
     }
 }
