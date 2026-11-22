@@ -268,6 +268,15 @@ public class SpeedDistributionManager : ISpeedDistributionManager
             }
         }
 
+        // Priority modulates the distributor's shape. Equal speeds stay proportional
+        // to priority; unequal speeds keep that shape instead of being replaced by it.
+        var allocationWeights = new double[count];
+        for (var i = 0; i < count; i++)
+        {
+            var shape = speeds[i] > 0 ? speeds[i] : 0.0;
+            allocationWeights[i] = sanitizedWeights[i] * shape;
+        }
+
         var effectiveCaps = new long[count];
         for (var i = 0; i < count; i++)
         {
@@ -397,7 +406,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
         var spareBandwidth = totalOriginal - allocatedSoFar;
 
-        // Tier 2: Distribute remaining spare bandwidth proportionally based on priority weights with Largest-Remainder (Hamilton-Hare) allocation.
+        // Tier 2: spare bandwidth follows speed_i * priority_i, then largest remainder.
         while (spareBandwidth > 0)
         {
             var eligible = new List<int>();
@@ -417,17 +426,16 @@ public class SpeedDistributionManager : ISpeedDistributionManager
             var activeWeightSum = 0.0;
             foreach (var i in eligible)
             {
-                activeWeightSum += sanitizedWeights[i];
+                activeWeightSum += allocationWeights[i];
             }
 
             if (activeWeightSum <= 0.0)
             {
                 foreach (var i in eligible)
                 {
-                    sanitizedWeights[i] = 1.0;
+                    allocationWeights[i] = sanitizedWeights[i];
+                    activeWeightSum += allocationWeights[i];
                 }
-
-                activeWeightSum = eligible.Count;
             }
 
             var exactShares = new double[count];
@@ -436,7 +444,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
             foreach (var i in eligible)
             {
-                var exact = spareBandwidth * (sanitizedWeights[i] / activeWeightSum);
+                var exact = spareBandwidth * (allocationWeights[i] / activeWeightSum);
                 exactShares[i] = exact;
                 var share = (long)exact;
                 tentativeShare[i] = share;
@@ -474,7 +482,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
                 {
                     var sortedEligible = eligible
                         .OrderByDescending(i => exactShares[i] - tentativeShare[i])
-                        .ThenByDescending(i => sanitizedWeights[i])
+                        .ThenByDescending(i => allocationWeights[i])
                         .ThenBy(i => i)
                         .ToList();
 
