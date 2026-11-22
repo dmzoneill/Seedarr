@@ -195,7 +195,7 @@ public static class Bootstrap
 
     public static void ConfigureKestrelLimits(KestrelServerOptions serverOptions)
     {
-        serverOptions.Limits.MaxRequestBodySize = 500 * 1024 * 1024; // 500 MB
+        serverOptions.Limits.MaxRequestBodySize = Seedarr.Http.RequestBodyLimits.Default;
         serverOptions.Limits.MaxConcurrentConnections = 1000;
         serverOptions.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
         serverOptions.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(30);
