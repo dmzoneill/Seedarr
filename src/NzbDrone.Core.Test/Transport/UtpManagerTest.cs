@@ -6,11 +6,17 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using DryIoc;
+using DryIoc.Microsoft.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Common.Composition;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Transport;
+using NzbDrone.Host;
 
 namespace NzbDrone.Core.Test.Transport;
 
@@ -245,6 +251,19 @@ public class UtpManagerTest
         method.Invoke(_subject, new object[] { data, sender });
     }
 
+    private void RetainAcceptedConnections()
+    {
+        _subject.OnConnectionAccepted += _ => { };
+    }
+
+    private ConcurrentDictionary<string, IUtpConnection> ActiveConnectionMap()
+    {
+        var activeConnectionsField = typeof(UtpManager).GetField(
+            "_activeConnections",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        return (ConcurrentDictionary<string, IUtpConnection>)activeConnectionsField.GetValue(_subject);
+    }
+
     [Test]
     public void HandleIncoming_should_ignore_packets_shorter_than_20_bytes()
     {
@@ -434,6 +453,7 @@ public class UtpManagerTest
     [Test]
     public void HandleIncoming_should_track_incoming_syn_connection()
     {
+        RetainAcceptedConnections();
         var data = new byte[20];
         data[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
         data[2] = 0x12;
@@ -448,6 +468,7 @@ public class UtpManagerTest
     [Test]
     public void HandleIncoming_syn_with_configured_listener_shares_socket_and_disposing_connection_does_not_dispose_listener()
     {
+        RetainAcceptedConnections();
         using var listener = new UdpClient();
         listener.Client.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         _subject.Listener = listener;
@@ -479,6 +500,7 @@ public class UtpManagerTest
     [Test]
     public void HandleIncoming_syn_packet_creates_connection_and_maps_both_sendId_and_receiveId()
     {
+        RetainAcceptedConnections();
         var data = new byte[20];
         data[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
         data[2] = 0x12;
@@ -508,6 +530,7 @@ public class UtpManagerTest
     [Test]
     public void HandleIncoming_subsequent_data_packet_with_receiveId_delivers_to_connection()
     {
+        RetainAcceptedConnections();
         var synData = new byte[20];
         synData[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
         synData[2] = 0x12;
@@ -545,6 +568,7 @@ public class UtpManagerTest
     [Test]
     public void Closing_incoming_connection_cleans_up_both_keys()
     {
+        RetainAcceptedConnections();
         var data = new byte[20];
         data[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
         data[2] = 0x12;
@@ -576,37 +600,25 @@ public class UtpManagerTest
     public void CreateConnection_registers_outgoing_connection_receive_id_and_cleans_up_on_close()
     {
         using var conn = (UtpConnection)_subject.CreateConnection();
-        var receiveKey = conn.ReceiveId.ToString();
+        var dict = ActiveConnectionMap();
 
-        var activeConnectionsField = typeof(UtpManager).GetField(
-            "_activeConnections",
-            BindingFlags.NonPublic | BindingFlags.Instance)!;
-        var dict = (ConcurrentDictionary<string, IUtpConnection>)activeConnectionsField.GetValue(_subject)!;
-
-        Assert.That(dict.ContainsKey(receiveKey), Is.True);
-        Assert.That(dict[receiveKey], Is.SameAs(conn));
+        Assert.That(dict.ContainsKey(conn.ReceiveId.ToString()), Is.False, "Connection ids must not be global demux keys");
+        Assert.That(dict.Values, Does.Contain(conn));
 
         conn.Dispose();
 
-        Assert.That(dict.ContainsKey(receiveKey), Is.False);
+        Assert.That(dict.Values, Does.Not.Contain(conn));
     }
 
     [Test]
     public void CreateConnection_indexes_both_send_and_receive_ids_and_cleans_up_all_keys_on_close()
     {
         var conn = (UtpConnection)_subject.CreateConnection();
-        var activeConnectionsField = typeof(UtpManager).GetField(
-            "_activeConnections",
-            BindingFlags.NonPublic | BindingFlags.Instance)!;
-        var dict = (ConcurrentDictionary<string, IUtpConnection>)activeConnectionsField.GetValue(_subject)!;
+        var dict = ActiveConnectionMap();
 
-        var recvKey = conn.ReceiveId.ToString();
-        var sendKey = conn.SendId.ToString();
-        var recvPlusOneKey = ((ushort)(conn.ReceiveId + 1)).ToString();
-
-        Assert.That(dict.ContainsKey(recvKey), Is.True);
-        Assert.That(dict.ContainsKey(sendKey), Is.True);
-        Assert.That(dict.ContainsKey(recvPlusOneKey), Is.True);
+        Assert.That(dict.ContainsKey(conn.ReceiveId.ToString()), Is.False);
+        Assert.That(dict.ContainsKey(conn.SendId.ToString()), Is.False);
+        Assert.That(dict.ContainsKey(((ushort)(conn.ReceiveId + 1)).ToString()), Is.False);
 
         var endpoint = new IPEndPoint(IPAddress.Loopback, 54321);
         conn.OnConnecting?.Invoke(conn, endpoint);
@@ -621,9 +633,6 @@ public class UtpManagerTest
 
         conn.Dispose();
 
-        Assert.That(dict.ContainsKey(recvKey), Is.False);
-        Assert.That(dict.ContainsKey(sendKey), Is.False);
-        Assert.That(dict.ContainsKey(recvPlusOneKey), Is.False);
         Assert.That(dict.ContainsKey(endpointRecvKey), Is.False);
         Assert.That(dict.ContainsKey(endpointSendKey), Is.False);
         Assert.That(dict.ContainsKey(endpointRecvPlusOneKey), Is.False);
@@ -633,6 +642,7 @@ public class UtpManagerTest
     [Test]
     public void HandleIncoming_inbound_connection_matches_both_connectionId_and_offset_connectionId()
     {
+        RetainAcceptedConnections();
         var synData = new byte[20];
         synData[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
         synData[2] = 0x20;
@@ -760,5 +770,181 @@ public class UtpManagerTest
         InvokeHandleIncoming(synData, sender);
 
         Assert.That(_subject.ActiveConnections, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void HandleIncoming_syn_without_consumer_does_not_retain_connection()
+    {
+        var data = new byte[20];
+        data[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        data[2] = 0x10;
+        data[3] = 0x01;
+
+        InvokeHandleIncoming(data, new IPEndPoint(IPAddress.Parse("10.9.9.9"), 4100));
+
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(0));
+        Assert.That(ActiveConnectionMap(), Is.Empty);
+    }
+
+    [Test]
+    public void HandleIncoming_same_connection_id_from_different_endpoints_does_not_collide()
+    {
+        RetainAcceptedConnections();
+
+        var data = new byte[20];
+        data[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        data[2] = 0x01;
+        data[3] = 0x01;
+        data[16] = 0x00;
+        data[17] = 0x01;
+
+        var endpointA = new IPEndPoint(IPAddress.Parse("10.1.0.1"), 1000);
+        var endpointB = new IPEndPoint(IPAddress.Parse("10.2.0.2"), 2000);
+        InvokeHandleIncoming(data, endpointA);
+        InvokeHandleIncoming(data, endpointB);
+
+        var dict = ActiveConnectionMap();
+        var connA = (UtpConnection)dict[$"{endpointA}_257"];
+        var connB = (UtpConnection)dict[$"{endpointB}_257"];
+        Assert.That(connA, Is.Not.SameAs(connB));
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(2));
+
+        var payload = new byte[] { 0xAB, 0xCD };
+        var dataPacket = new byte[20 + payload.Length];
+        dataPacket[0] = (byte)(((byte)UtpPacketType.Data) << 4 | 1);
+        dataPacket[2] = 0x01;
+        dataPacket[3] = 0x02;
+        dataPacket[16] = 0x00;
+        dataPacket[17] = 0x02;
+        Array.Copy(payload, 0, dataPacket, 20, payload.Length);
+        InvokeHandleIncoming(dataPacket, endpointA);
+
+        var fromA = new byte[2];
+        Assert.That(connA.Receive(fromA, 0, 2, 200), Is.EqualTo(2));
+        Assert.That(fromA, Is.EqualTo(payload));
+        Assert.That(connB.Receive(new byte[2], 0, 2, 50), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void HandleIncoming_handler_exception_does_not_retain_connection()
+    {
+        _subject.OnConnectionAccepted += _ => throw new InvalidOperationException("reject");
+
+        var data = new byte[20];
+        data[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        data[3] = 0x2A;
+
+        InvokeHandleIncoming(data, new IPEndPoint(IPAddress.Parse("10.4.4.4"), 4400));
+
+        Assert.That(ActiveConnectionMap(), Is.Empty);
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task Inbound_utp_handshake_completes()
+    {
+        using var probe = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var port = ((IPEndPoint)probe.Client.LocalEndPoint).Port;
+        probe.Close();
+
+        _configService.UtpEnabled.Returns(true);
+        _configService.ListeningPort.Returns(port);
+        _configService.TransportConnectionTimeoutSeconds.Returns(5);
+
+        var accepted = new TaskCompletionSource<IUtpConnection>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _subject.OnConnectionAccepted += conn => accepted.TrySetResult(conn);
+
+        using var cts = new CancellationTokenSource();
+        var execute = typeof(UtpManager).GetMethod("ExecuteAsync", BindingFlags.NonPublic | BindingFlags.Instance);
+        var listenTask = (Task)execute.Invoke(_subject, new object[] { cts.Token });
+
+        try
+        {
+            Assert.That(() => _subject.Listener != null, Is.True.After(2000, 20));
+
+            using var client = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+            var syn = new byte[20];
+            syn[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+            syn[2] = 0x11;
+            syn[3] = 0x22;
+            syn[12] = 0x00;
+            syn[13] = 0x00;
+            syn[14] = 0xFF;
+            syn[15] = 0xFF;
+            syn[16] = 0x00;
+            syn[17] = 0x01;
+            await client.SendAsync(syn, new IPEndPoint(IPAddress.Loopback, port));
+
+            using var receiveCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            var result = await client.ReceiveAsync(receiveCts.Token);
+            Assert.That(result.Buffer.Length, Is.GreaterThanOrEqualTo(20));
+            Assert.That((UtpPacketType)(result.Buffer[0] >> 4), Is.EqualTo(UtpPacketType.State));
+            Assert.That((result.Buffer[2] << 8) | result.Buffer[3], Is.EqualTo(0x1122));
+
+            var completed = await Task.WhenAny(accepted.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+            Assert.That(completed, Is.SameAs(accepted.Task));
+            var conn = await accepted.Task;
+            Assert.That(conn.IsConnected, Is.True);
+            Assert.That(conn.SendId, Is.EqualTo(0x1122));
+            Assert.That(conn.RemoteEndPoint.Address, Is.EqualTo(IPAddress.Loopback));
+        }
+        finally
+        {
+            cts.Cancel();
+            try
+            {
+                listenTask.Wait(TimeSpan.FromSeconds(2));
+            }
+            catch (AggregateException)
+            {
+            }
+
+            if (accepted.Task.IsCompletedSuccessfully)
+            {
+                accepted.Task.Result.Dispose();
+            }
+        }
+    }
+
+    [Test]
+    public void Hosted_UtpManager_is_the_IUtpManager_singleton()
+    {
+        var config = Substitute.For<IConfigService>();
+        config.UtpEnabled.Returns(true);
+        config.TransportConnectionTimeoutSeconds.Returns(5);
+
+        var container = new Container(rules => rules.WithNzbDroneRules());
+        container.RegisterInstance<IConfigService>(config);
+        container.RegisterMany(
+            new[] { typeof(UtpManager) },
+            Reuse.Singleton,
+            serviceTypeCondition: t => !ContainerExtensions.IsIgnoredInterface(t),
+            ifAlreadyRegistered: IfAlreadyRegistered.Keep);
+
+        var services = new ServiceCollection();
+        Startup.RegisterBackgroundHostedServices(services, new[] { typeof(UtpManager) });
+        using var provider = new DryIocServiceProviderFactory(container).CreateBuilder(services);
+
+        var injected = provider.GetRequiredService<IUtpManager>();
+        var hosted = provider.GetServices<IHostedService>().OfType<UtpManager>().ToList();
+
+        Assert.That(hosted, Has.Count.EqualTo(1));
+        Assert.That(hosted[0], Is.SameAs(injected));
+
+        IUtpConnection accepted = null;
+        injected.OnConnectionAccepted += conn => accepted = conn;
+
+        var data = new byte[20];
+        data[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        data[3] = 9;
+        var sender = new IPEndPoint(IPAddress.Loopback, 4242);
+        typeof(UtpManager).GetMethod("HandleIncoming", BindingFlags.NonPublic | BindingFlags.Instance)
+            .Invoke(hosted[0], new object[] { data, sender });
+
+        Assert.That(accepted, Is.Not.Null);
+        Assert.That(accepted.IsConnected, Is.True);
+        Assert.That(injected.ActiveConnections, Is.EqualTo(1));
+        Assert.That(hosted[0].ActiveConnections, Is.EqualTo(1));
+        accepted.Dispose();
     }
 }

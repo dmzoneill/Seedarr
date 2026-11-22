@@ -354,22 +354,13 @@ public class BootstrapTest
         var services = new ServiceCollection();
         Startup.RegisterBackgroundHostedServices(services);
 
-        var registeredImplementationTypes = services
-            .Where(d => d.ImplementationType != null)
-            .Select(d => d.ImplementationType)
-            .ToHashSet();
-
-        foreach (var backgroundServiceType in expected)
-        {
-            Assert.That(
-                registeredImplementationTypes,
-                Does.Contain(backgroundServiceType),
-                $"{backgroundServiceType.Name} must be registered as a hosted service");
-        }
-
         var hostedServiceDescriptors = services
-            .Where(d => typeof(IHostedService).IsAssignableFrom(d.ServiceType))
+            .Where(d => d.ServiceType == typeof(IHostedService))
             .ToList();
-        Assert.That(hostedServiceDescriptors.Count, Is.GreaterThanOrEqualTo(expected.Count));
+
+        Assert.That(hostedServiceDescriptors.Count, Is.EqualTo(expected.Count));
+        Assert.That(hostedServiceDescriptors.All(d => d.Lifetime == ServiceLifetime.Singleton), Is.True);
+        Assert.That(hostedServiceDescriptors.All(d => d.ImplementationFactory != null), Is.True,
+            "Hosted services must resolve the existing singleton so listeners and injected interfaces are one instance");
     }
 }

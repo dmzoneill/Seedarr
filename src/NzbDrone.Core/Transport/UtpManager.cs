@@ -34,6 +34,7 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
     private readonly ConcurrentDictionary<string, IUtpConnection> _activeConnections = new();
     private readonly object _listenerLock = new();
     private readonly SemaphoreSlim _rebindSignal = new(0, 1);
+    private long _lifetimeSequence;
     private CancellationTokenSource _listenerCts;
     private UdpClient _listener;
     private bool _isVpnDropped;
@@ -245,32 +246,19 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
             registeredKeys.Add(key);
         }
 
-        RegisterKey(connection.ReceiveId.ToString());
-        RegisterKey(connection.SendId.ToString());
-        RegisterKey(((ushort)(connection.ReceiveId + 1)).ToString());
+        RegisterKey(NextLifetimeKey());
 
         var prevConnecting = connection.OnConnecting;
         connection.OnConnecting = (conn, endpoint) =>
         {
-            RegisterKey($"{endpoint}_{connection.ReceiveId}");
-            RegisterKey($"{endpoint}_{connection.SendId}");
-            RegisterKey($"{endpoint}_{(ushort)(connection.ReceiveId + 1)}");
+            RegisterEndpointKeys(RegisterKey, endpoint, connection);
             prevConnecting?.Invoke(conn, endpoint);
         };
 
         var prevConnected = connection.OnConnected;
         connection.OnConnected = conn =>
         {
-            if (connection.RemoteEndPoint != null)
-            {
-                RegisterKey($"{connection.RemoteEndPoint}_{connection.ReceiveId}");
-                RegisterKey($"{connection.RemoteEndPoint}_{connection.SendId}");
-                RegisterKey($"{connection.RemoteEndPoint}_{(ushort)(connection.ReceiveId + 1)}");
-            }
-
-            RegisterKey(connection.ReceiveId.ToString());
-            RegisterKey(connection.SendId.ToString());
-            RegisterKey(((ushort)(connection.ReceiveId + 1)).ToString());
+            RegisterEndpointKeys(RegisterKey, connection.RemoteEndPoint, connection);
             prevConnected?.Invoke(conn);
         };
 
@@ -280,16 +268,6 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
             foreach (var key in registeredKeys)
             {
                 _activeConnections.TryRemove(key, out _);
-            }
-
-            _activeConnections.TryRemove(connection.ReceiveId.ToString(), out _);
-            _activeConnections.TryRemove(connection.SendId.ToString(), out _);
-            _activeConnections.TryRemove(((ushort)(connection.ReceiveId + 1)).ToString(), out _);
-            if (connection.RemoteEndPoint != null)
-            {
-                _activeConnections.TryRemove($"{connection.RemoteEndPoint}_{connection.ReceiveId}", out _);
-                _activeConnections.TryRemove($"{connection.RemoteEndPoint}_{connection.SendId}", out _);
-                _activeConnections.TryRemove($"{connection.RemoteEndPoint}_{(ushort)(connection.ReceiveId + 1)}", out _);
             }
 
             prevClosed?.Invoke(c);
@@ -467,10 +445,8 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
             _logger.Debug("uTP SYN from {0}, connection {1}", sender, connectionId);
             var sendId = connectionId;
             var receiveId = (ushort)(connectionId + 1);
-            var synKey = $"{sender}_{sendId}";
-            var dataKey = $"{sender}_{receiveId}";
-            var sendIdKey = sendId.ToString();
-            var receiveIdKey = receiveId.ToString();
+            var synKey = DemuxKey(sender, sendId);
+            var dataKey = DemuxKey(sender, receiveId);
 
             if ((_activeConnections.TryGetValue(synKey, out var existingConn) ||
                 _activeConnections.TryGetValue(dataKey, out existingConn)) &&
@@ -480,18 +456,24 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
                 return;
             }
 
+            var handler = OnConnectionAccepted;
+            if (handler == null)
+            {
+                _logger.Debug("Ignoring uTP SYN from {0}; no consumer is registered", sender);
+                return;
+            }
+
             var conn = new UtpConnection(_listener, sendId, sender, _configService.TransportConnectionTimeoutSeconds, _configService.BindInterface);
+            var lifetimeKey = NextLifetimeKey();
+            _activeConnections[lifetimeKey] = conn;
             _activeConnections[synKey] = conn;
             _activeConnections[dataKey] = conn;
-            _activeConnections[sendIdKey] = conn;
-            _activeConnections[receiveIdKey] = conn;
             var prevClosed = conn.OnClosed;
             conn.OnClosed = c =>
             {
+                _activeConnections.TryRemove(lifetimeKey, out _);
                 _activeConnections.TryRemove(synKey, out _);
                 _activeConnections.TryRemove(dataKey, out _);
-                _activeConnections.TryRemove(sendIdKey, out _);
-                _activeConnections.TryRemove(receiveIdKey, out _);
                 prevClosed?.Invoke(c);
             };
 
@@ -499,33 +481,18 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
 
             try
             {
-                OnConnectionAccepted?.Invoke(conn);
+                handler(conn);
             }
             catch (Exception ex)
             {
                 _logger.Debug(ex, "Error dispatching accepted uTP connection from {0}", sender);
+                conn.Abort();
             }
 
             return;
         }
 
-        var matchKey = $"{sender}_{connectionId}";
-        if (!_activeConnections.TryGetValue(matchKey, out var activeConn))
-        {
-            if (!_activeConnections.TryGetValue($"{sender}_{(ushort)(connectionId - 1)}", out activeConn))
-            {
-                if (!_activeConnections.TryGetValue($"{sender}_{(ushort)(connectionId + 1)}", out activeConn))
-                {
-                    if (!_activeConnections.TryGetValue(connectionId.ToString(), out activeConn))
-                    {
-                        if (!_activeConnections.TryGetValue(((ushort)(connectionId - 1)).ToString(), out activeConn))
-                        {
-                            _activeConnections.TryGetValue(((ushort)(connectionId + 1)).ToString(), out activeConn);
-                        }
-                    }
-                }
-            }
-        }
+        var activeConn = FindConnection(sender, connectionId);
 
         if (activeConn is UtpConnection matchedUtp)
         {
@@ -549,5 +516,53 @@ public class UtpManager : BackgroundService, IUtpManager, IHandle<VpnKillSwitchT
         {
             _logger.Debug("uTP RESET from {0}, connection {1}", sender, connectionId);
         }
+    }
+
+    private string NextLifetimeKey()
+    {
+        var id = Interlocked.Increment(ref _lifetimeSequence);
+        return "lifetime:" + id;
+    }
+
+    private static string DemuxKey(IPEndPoint endpoint, ushort connectionId)
+    {
+        return endpoint + "_" + connectionId;
+    }
+
+    private static void RegisterEndpointKeys(Action<string> registerKey, IPEndPoint endpoint, UtpConnection connection)
+    {
+        if (registerKey == null || endpoint == null || connection == null)
+        {
+            return;
+        }
+
+        registerKey(DemuxKey(endpoint, connection.ReceiveId));
+        registerKey(DemuxKey(endpoint, connection.SendId));
+        registerKey(DemuxKey(endpoint, (ushort)(connection.ReceiveId + 1)));
+    }
+
+    private IUtpConnection FindConnection(IPEndPoint sender, ushort connectionId)
+    {
+        if (sender == null)
+        {
+            return null;
+        }
+
+        if (_activeConnections.TryGetValue(DemuxKey(sender, connectionId), out var activeConn))
+        {
+            return activeConn;
+        }
+
+        if (_activeConnections.TryGetValue(DemuxKey(sender, (ushort)(connectionId - 1)), out activeConn))
+        {
+            return activeConn;
+        }
+
+        if (_activeConnections.TryGetValue(DemuxKey(sender, (ushort)(connectionId + 1)), out activeConn))
+        {
+            return activeConn;
+        }
+
+        return null;
     }
 }

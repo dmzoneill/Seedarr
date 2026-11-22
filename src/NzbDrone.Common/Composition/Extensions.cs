@@ -61,7 +61,8 @@ public static class ContainerExtensions
     {
         if (iface == typeof(IDisposable) ||
             iface == typeof(IAsyncDisposable) ||
-            iface == typeof(IComparable))
+            iface == typeof(IComparable) ||
+            iface.FullName == "Microsoft.Extensions.Hosting.IHostedService")
         {
             return true;
         }
