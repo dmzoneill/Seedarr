@@ -251,8 +251,15 @@ public class Startup
             });
         });
 
-        services.AddHostedService<AppLifetime>();
+        // AutoAddServices registers each hosted service as its concrete type and service interfaces,
+        // one shared singleton. AddHostedService<T>() would construct a second instance, so the host
+        // receives a factory that returns the instance already registered in DryIoc.
+        RegisterApplicationHostedServices(services);
+    }
 
+    public static void RegisterApplicationHostedServices(IServiceCollection services)
+    {
+        services.Add(ServiceDescriptor.Singleton<IHostedService>(static sp => sp.GetRequiredService<AppLifetime>()));
         RegisterBackgroundHostedServices(services);
     }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using DryIoc;
 using Microsoft.Extensions.Hosting;
 
@@ -11,9 +12,9 @@ public static class ContainerExtensions
     public static Rules WithNzbDroneRules(this Rules rules)
     {
         return rules
-            .WithAutoConcreteTypeResolution()
+            .WithAutoConcreteTypeResolution(IsApplicationConcreteType)
             .WithDefaultReuse(Reuse.Singleton)
-            .With(Made.Of(FactoryMethod.ConstructorWithResolvableArguments))
+            .With(Made.Of(FactoryMethod.ConstructorWithResolvableArguments, Parameters.Of.Details(UseDeclaredDefaultForOptionalDelegate)))
             .WithoutThrowOnRegisteringDisposableTransient();
     }
 
@@ -37,21 +38,32 @@ public static class ContainerExtensions
                 continue;
             }
 
+            // Keep the factory from the first scan. A later scan of the same implementation must
+            // not replace it or append a second one. Other implementations of the same contract
+            // are still added below via AppendNewImplementation.
+            if (container.IsRegistered(type))
+            {
+                continue;
+            }
+
             var interfaces = type.GetInterfaces()
                 .Where(i => !IsIgnoredInterface(i))
                 .ToArray();
 
-            var reuse = DetermineReuse(type, interfaces.Length > 0);
+            // IHostedService is not a container contract, so a worker whose other interfaces are
+            // ignored still has to be registered. The host factory resolves that singleton.
+            var isHostedService = typeof(IHostedService).IsAssignableFrom(type);
+            var reuse = DetermineReuse(type, interfaces.Length > 0 || isHostedService);
 
             if (interfaces.Length > 0)
             {
                 container.RegisterMany(
                     new[] { type },
                     reuse,
-                    serviceTypeCondition: t => !IsIgnoredInterface(t),
-                    ifAlreadyRegistered: IfAlreadyRegistered.Keep);
+                    serviceTypeCondition: IsContainerServiceContract,
+                    ifAlreadyRegistered: IfAlreadyRegistered.AppendNewImplementation);
             }
-            else if (HasExplicitReuseAttribute(type))
+            else if (isHostedService || HasExplicitReuseAttribute(type))
             {
                 container.Register(type, reuse, ifAlreadyRegistered: IfAlreadyRegistered.Keep);
             }
@@ -134,5 +146,48 @@ public static class ContainerExtensions
             throw new InvalidOperationException(
                 $"Type '{type.FullName}' has multiple lifetime attributes ([Transient], [Scoped], [Singleton]). Only one may be specified.");
         }
+    }
+
+    // Optional delegate parameters are test seams (`= null`). DryIoc can always build a Func wrapper,
+    // which selects those seams and hands back a task that was never started.
+    private static ServiceDetails UseDeclaredDefaultForOptionalDelegate(Request request, ParameterInfo parameter)
+    {
+        _ = request;
+
+        if (!parameter.IsOptional || !typeof(Delegate).IsAssignableFrom(parameter.ParameterType))
+        {
+            return null;
+        }
+
+        var defaultValue = parameter.DefaultValue;
+        if (defaultValue is DBNull)
+        {
+            defaultValue = null;
+        }
+
+        return ServiceDetails.Of(defaultValue);
+    }
+
+    // BCL types such as IPAddress, Task, and HttpClient are not services. Auto-constructing them
+    // picks test constructors and can throw or return a task that was never started.
+    private static bool IsApplicationConcreteType(Request request)
+    {
+        var ns = request.ServiceType?.Namespace;
+        if (string.IsNullOrEmpty(ns))
+        {
+            return false;
+        }
+
+        return ns.Equals("NzbDrone", StringComparison.Ordinal)
+            || ns.StartsWith("NzbDrone.", StringComparison.Ordinal)
+            || ns.Equals("Seedarr", StringComparison.Ordinal)
+            || ns.StartsWith("Seedarr.", StringComparison.Ordinal);
+    }
+
+    private static bool IsContainerServiceContract(Type serviceType)
+    {
+        // BackgroundService is the shared base class. Registering every worker as that
+        // contract would make a single resolve ambiguous once each implementation is kept.
+        return !IsIgnoredInterface(serviceType) && serviceType != typeof(BackgroundService);
     }
 }
