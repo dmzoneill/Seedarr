@@ -2,6 +2,8 @@ using System;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Validation;
 
@@ -13,7 +15,10 @@ public class DiscordNotification : INotificationService
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(10),
         AllowAutoRedirect = false,
-    });
+    })
+    {
+        Timeout = NotificationHttp.Timeout
+    };
 
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
@@ -33,12 +38,12 @@ public class DiscordNotification : INotificationService
         _httpClient = httpClient;
     }
 
-    public void OnTorrentAdded(string torrentName) => SendEmbed("Torrent Added", torrentName, 0x35C5F4);
-    public void OnSeedingStarted(string torrentName) => SendEmbed("Seeding Started", torrentName, 0x4CAF50);
-    public void OnSeedingStopped(string torrentName) => SendEmbed("Seeding Stopped", torrentName, 0xFF9800);
-    public void OnHealthIssue(string source, string message) => SendEmbed($"Health: {source}", message, 0xF44336);
+    public void OnTorrentAdded(string torrentName) => SendEmbedAsync("Torrent Added", torrentName, 0x35C5F4).GetAwaiter().GetResult();
+    public void OnSeedingStarted(string torrentName) => SendEmbedAsync("Seeding Started", torrentName, 0x4CAF50).GetAwaiter().GetResult();
+    public void OnSeedingStopped(string torrentName) => SendEmbedAsync("Seeding Stopped", torrentName, 0xFF9800).GetAwaiter().GetResult();
+    public void OnHealthIssue(string source, string message) => SendEmbedAsync($"Health: {source}", message, 0xF44336).GetAwaiter().GetResult();
 
-    private void SendEmbed(string title, string description, int color)
+    private async Task SendEmbedAsync(string title, string description, int color)
     {
         if (string.IsNullOrWhiteSpace(WebhookUrl))
         {
@@ -81,7 +86,7 @@ public class DiscordNotification : INotificationService
             var json = JsonSerializer.Serialize(payload);
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
             using var request = new HttpRequestMessage(HttpMethod.Post, WebhookUrl) { Content = content };
-            using var response = _httpClient.Send(request);
+            using var response = await _httpClient.SendAsync(request, CancellationToken.None).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 throw new HttpRequestException($"Discord notification failed with HTTP {(int)response.StatusCode} {response.StatusCode}", null, response.StatusCode);

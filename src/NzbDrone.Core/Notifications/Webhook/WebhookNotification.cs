@@ -15,7 +15,10 @@ public class WebhookNotification : INotificationService
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(10),
         AllowAutoRedirect = false,
-    });
+    })
+    {
+        Timeout = NotificationHttp.Timeout
+    };
 
     private static readonly ResiliencePipeline SharedPolicy = ResiliencePolicies.GetWebhookPolicy();
 

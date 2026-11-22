@@ -24,7 +24,10 @@ public class TelegramPollingService : BackgroundService, ITelegramPollingService
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(10),
         AllowAutoRedirect = false,
-    });
+    })
+    {
+        Timeout = NotificationHttp.Timeout
+    };
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
