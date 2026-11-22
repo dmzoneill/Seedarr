@@ -100,6 +100,7 @@ public class PeerConnection : IDisposable
     public int MaxPipelinedRequests { get; set; } = 200;
 
     private int _pendingRequestCount;
+    private int _incomingRequestCount;
 
     public int PendingRequestCount
     {
@@ -107,17 +108,47 @@ public class PeerConnection : IDisposable
         set => Interlocked.Exchange(ref _pendingRequestCount, Math.Max(0, value));
     }
 
+    /// <summary>
+    /// Blocks the peer has asked us to upload. Independent of <see cref="PendingRequestCount"/>,
+    /// which counts blocks we have asked the peer to send.
+    /// </summary>
+    public int IncomingRequestCount
+    {
+        get => Volatile.Read(ref _incomingRequestCount);
+        set => Interlocked.Exchange(ref _incomingRequestCount, Math.Max(0, value));
+    }
+
+    public int IncrementPendingRequests()
+    {
+        return Interlocked.Increment(ref _pendingRequestCount);
+    }
+
+    public int IncrementIncomingRequests()
+    {
+        return Interlocked.Increment(ref _incomingRequestCount);
+    }
+
     public int DecrementPendingRequests()
+    {
+        return Decrement(ref _pendingRequestCount);
+    }
+
+    public int DecrementIncomingRequests()
+    {
+        return Decrement(ref _incomingRequestCount);
+    }
+
+    private static int Decrement(ref int counter)
     {
         while (true)
         {
-            var current = _pendingRequestCount;
+            var current = counter;
             if (current <= 0)
             {
                 return 0;
             }
 
-            if (Interlocked.CompareExchange(ref _pendingRequestCount, current - 1, current) == current)
+            if (Interlocked.CompareExchange(ref counter, current - 1, current) == current)
             {
                 return current - 1;
             }
@@ -2343,6 +2374,7 @@ public class PeerConnection : IDisposable
 
             _isDisposed = true;
             PendingRequestCount = 0;
+            IncomingRequestCount = 0;
 
             if (BandwidthLimiter != null && !string.IsNullOrEmpty(_peerId))
             {

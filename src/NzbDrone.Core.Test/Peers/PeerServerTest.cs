@@ -419,20 +419,58 @@ public class PeerServerTest
     }
 
     [Test]
-    public void HandleMessage_should_ignore_request_when_pipeline_full()
+    public void HandleMessage_serves_peer_request_when_only_the_download_pipeline_is_full()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.MaxPipelinedRequests = 10;
+        serverConn.PendingRequestCount = 10;
+        serverConn.IdleChance = 0.0;
+
+        var payload = BuildRequestPayload(1, 0, 16384);
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Request, Payload = payload });
+
+        Assert.That(serverConn.PendingRequestCount, Is.EqualTo(10));
+        clientConn.MessageReadTimeoutMs = 1000;
+        var received = clientConn.ReceiveMessage();
+        Assert.That(received, Is.Not.Null);
+        Assert.That(received.Type, Is.EqualTo(PeerMessageType.Piece));
+    }
+
+    [Test]
+    public void HandleMessage_rejects_peer_request_when_incoming_queue_is_full()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.MaxPipelinedRequests = 1;
+        serverConn.PendingRequestCount = 0;
+        serverConn.IdleChance = 0.0;
+        lock (serverConn.PendingIncomingRequests)
+        {
+            serverConn.PendingIncomingRequests.Add(new PeerRequest(0, 0, 16));
+        }
+
+        var payload = BuildRequestPayload(1, 0, 16384);
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Request, Payload = payload });
+
+        Assert.That(serverConn.PendingRequestCount, Is.EqualTo(0));
+        clientConn.MessageReadTimeoutMs = 300;
+        var received = clientConn.ReceiveMessage();
+        Assert.That(received, Is.Null);
+    }
+
+    [Test]
+    public void HandleMessage_cancel_for_unknown_request_does_not_shrink_download_pipeline()
     {
         var conn = CreateTestConnection();
-        conn.MaxPipelinedRequests = 5;
-        conn.PendingRequestCount = 5;
-        conn.IdleChance = 0.0;
+        conn.PendingRequestCount = 7;
 
-        var payload = new byte[12];
-        payload[11] = 16; // length = 16
-        var message = new PeerMessage { Type = PeerMessageType.Request, Payload = payload };
+        for (var i = 0; i < 7; i++)
+        {
+            var payload = BuildRequestPayload(i, 0, 16384);
+            InvokeHandleMessage(conn, new PeerMessage { Type = PeerMessageType.Cancel, Payload = payload });
+        }
 
-        InvokeHandleMessage(conn, message);
-
-        Assert.That(conn.PendingRequestCount, Is.EqualTo(5));
+        Assert.That(conn.PendingRequestCount, Is.EqualTo(7));
+        Assert.That(conn.IncomingRequestCount, Is.EqualTo(0));
     }
 
     [Test]
@@ -2204,12 +2242,14 @@ public class PeerServerTest
     public void HandlePieceRequest_should_decrement_pending_request_count_when_fulfilled()
     {
         var (clientConn, serverConn) = CreateTestPair();
-        serverConn.PendingRequestCount = 3;
+        serverConn.IncomingRequestCount = 3;
+        serverConn.PendingRequestCount = 4;
 
         var payload = BuildRequestPayload(1, 0, 16384);
         InvokeHandlePieceRequest(serverConn, payload);
 
-        Assert.That(serverConn.PendingRequestCount, Is.EqualTo(2));
+        Assert.That(serverConn.IncomingRequestCount, Is.EqualTo(2));
+        Assert.That(serverConn.PendingRequestCount, Is.EqualTo(4));
     }
 
     [Test]

@@ -965,7 +965,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
                             }
 
                             _endgameManager.RegisterRequest(torrentId, cand.PieceIndex, cand.Begin, cand.Length, connection);
-                            connection.PendingRequestCount++;
+                            connection.IncrementPendingRequests();
                             return cand;
                         }
                     }
@@ -1082,7 +1082,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
                 }
 
                 _endgameManager.RegisterRequest(torrentId, block.PieceIndex, block.Begin, block.Length, peer);
-                peer.PendingRequestCount++;
+                peer.IncrementPendingRequests();
                 SendBlockRequest(peer, block.PieceIndex, block.Begin, block.Length);
                 duplicated.Add((peer, block));
             }
@@ -2384,6 +2384,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
             UnregisterPeerPieces(connection, sessionInfoHash);
 
             connection.PendingRequestCount = 0;
+            connection.IncomingRequestCount = 0;
             connection.Dispose();
         }
     }
@@ -2834,6 +2835,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
             UnregisterPeerPieces(connection, sessionInfoHash);
 
             connection.PendingRequestCount = 0;
+            connection.IncomingRequestCount = 0;
             connection.Dispose();
         }
     }
@@ -3079,7 +3081,13 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
                     break;
                 }
 
-                if (connection.PendingRequestCount >= connection.MaxPipelinedRequests)
+                int queuedIncoming;
+                lock (connection.PendingIncomingRequests)
+                {
+                    queuedIncoming = connection.PendingIncomingRequests.Count;
+                }
+
+                if (queuedIncoming >= connection.MaxPipelinedRequests)
                 {
                     _logger.Trace(
                         "Request pipeline full ({0}) from {1}, rejecting",
@@ -3122,7 +3130,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
                             connection.PendingIncomingRequests.Add(req);
                         }
 
-                        connection.PendingRequestCount++;
+                        connection.IncrementIncomingRequests();
                         try
                         {
                             HandlePieceRequest(connection, message.Payload);
@@ -3157,6 +3165,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
                 break;
 
             case PeerMessageType.Cancel:
+                var removedIncoming = 0;
                 if (message.Payload != null && message.Payload.Length >= 12)
                 {
                     var cancelPieceIndex = BinaryPrimitives.ReadInt32BigEndian(message.Payload.AsSpan(0, 4));
@@ -3165,7 +3174,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
 
                     lock (connection.PendingIncomingRequests)
                     {
-                        connection.PendingIncomingRequests.RemoveAll(r =>
+                        removedIncoming = connection.PendingIncomingRequests.RemoveAll(r =>
                             r.PieceIndex == cancelPieceIndex &&
                             r.Begin == cancelBegin &&
                             (cancelLength <= 0 || r.Length == cancelLength));
@@ -3180,9 +3189,9 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
                     }
                 }
 
-                if (connection.PendingRequestCount > 0)
+                for (var i = 0; i < removedIncoming; i++)
                 {
-                    connection.PendingRequestCount--;
+                    connection.DecrementIncomingRequests();
                 }
 
                 break;
@@ -3868,10 +3877,7 @@ public class PeerServer : BackgroundService, IDisposable, IPeerServer, IHandle<V
         }
         finally
         {
-            if (connection.PendingRequestCount > 0)
-            {
-                connection.PendingRequestCount--;
-            }
+            connection.DecrementIncomingRequests();
         }
     }
 
