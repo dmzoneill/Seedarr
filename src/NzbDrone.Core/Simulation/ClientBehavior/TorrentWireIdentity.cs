@@ -125,9 +125,10 @@ public static class TorrentWireIdentityResolver
                 {
                     var name = clientName.Trim().ToLowerInvariant();
                     var match = available.FirstOrDefault(p =>
-                        p.Name.Equals(clientName, StringComparison.OrdinalIgnoreCase) ||
-                        p.GetType().Name.StartsWith(clientName, StringComparison.OrdinalIgnoreCase) ||
-                        (p.Name != null && p.Name.Contains(name, StringComparison.OrdinalIgnoreCase)));
+                        p != null &&
+                        ((p.Name != null && p.Name.Equals(clientName, StringComparison.OrdinalIgnoreCase)) ||
+                         p.GetType().Name.StartsWith(clientName, StringComparison.OrdinalIgnoreCase) ||
+                         (p.Name != null && p.Name.Contains(name, StringComparison.OrdinalIgnoreCase))));
                     if (match != null)
                     {
                         return match;
