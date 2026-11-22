@@ -520,7 +520,7 @@ public class ConnectionManager : IConnectionManager,
             return;
         }
 
-        var now = DateTime.UtcNow;
+        List<PeerConnection> snapshot;
         lock (_lock)
         {
             if (_connections.Count == 0)
@@ -528,61 +528,66 @@ public class ConnectionManager : IConnectionManager,
                 return;
             }
 
+            snapshot = _connections.ToList();
+        }
+
+        var now = DateTime.UtcNow;
+        var immediate = new List<PeerConnection>();
+        var needProgress = new List<PeerConnection>();
+
+        foreach (var conn in snapshot)
+        {
+            if (IsDropoutProtected(conn, now))
+            {
+                continue;
+            }
+
+            if (IsMutuallyIdle(conn, now) || IsSnubbedStalled(conn, now))
+            {
+                immediate.Add(conn);
+                continue;
+            }
+
+            if (IsUnreciprocatedUpload(conn))
+            {
+                needProgress.Add(conn);
+            }
+        }
+
+        // Current progress comes from the torrent service, not the handshake snapshot.
+        // The lookup stays outside _lock so a busy database cannot stall accepts.
+        var leecherHashes = ResolveLeecherInfoHashes(needProgress);
+
+        lock (_lock)
+        {
             toRemove = new List<PeerConnection>();
 
-            foreach (var conn in _connections)
+            foreach (var conn in immediate)
             {
-                // LAN Peer Immunity: Never drop peers tagged with L (LAN peers)
-                if (conn.IsLocalPeer)
+                if (!_connections.Contains(conn) || IsDropoutProtected(conn, now))
                 {
                     continue;
                 }
 
-                // Active optimistic unchoke candidates during their 30s evaluation window
-                if (conn.IsOptimisticUnchoked)
+                if (IsMutuallyIdle(conn, now) || IsSnubbedStalled(conn, now))
                 {
-                    if (conn.LastUnchokedAt == null || (now - conn.LastUnchokedAt.Value).TotalSeconds <= 30)
-                    {
-                        continue;
-                    }
-                }
-
-                // Deterministic Anti-Leech Pruning Rules:
-                // 1. Mutual Disinterest & Inactivity: Both !AmInterested && !PeerInterested with zero transfer for > 120s
-                var isZeroSpeed = (conn.DownloadRate + conn.UploadRate) == 0;
-                var inactiveTime = (now - conn.LastActivity).TotalSeconds;
-                if (!conn.AmInterested && !conn.PeerInterested && isZeroSpeed && inactiveTime > 120)
-                {
+                    _connections.Remove(conn);
                     toRemove.Add(conn);
-                    continue;
-                }
-
-                // 2. Snubbed Stalled Leechers: AmInterested && !PeerChoking (unchoked by peer) where zero payload bytes have been received for > 60s while requests remain pending
-                var idleBytesTime = (now - conn.LastBytesReceived).TotalSeconds;
-                if (conn.AmInterested && !conn.PeerChoking && (conn.PendingRequestCount > 0 || conn.IsSnubbed) && idleBytesTime > 60)
-                {
-                    toRemove.Add(conn);
-                    continue;
-                }
-
-                // 3. Unreciprocated Upload Leechers: We are unchoking the peer and uploading blocks, but the peer is choked/choking us and we are in leecher mode on that torrent without download reciprocity
-                if (!conn.AmChoking && (conn.UploadRate > 0 || conn.BytesUploaded > 0) && conn.PeerChoking && conn.DownloadRate == 0)
-                {
-                    var isLeecherMode = conn.MatchedTorrent != null
-                        ? conn.MatchedTorrent.Progress < 1.0
-                        : ResolveTorrent(conn.InfoHash) is { } t && t.Progress < 1.0;
-
-                    if (isLeecherMode)
-                    {
-                        toRemove.Add(conn);
-                        continue;
-                    }
                 }
             }
 
-            foreach (var conn in toRemove)
+            foreach (var conn in needProgress)
             {
-                _connections.Remove(conn);
+                if (!_connections.Contains(conn) || IsDropoutProtected(conn, now) || !IsUnreciprocatedUpload(conn))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(conn.InfoHash) && leecherHashes.Contains(conn.InfoHash))
+                {
+                    _connections.Remove(conn);
+                    toRemove.Add(conn);
+                }
             }
         }
 
@@ -714,6 +719,95 @@ public class ConnectionManager : IConnectionManager,
         return 20;
     }
 
+    private static bool IsDropoutProtected(PeerConnection conn, DateTime now)
+    {
+        if (conn.IsLocalPeer)
+        {
+            return true;
+        }
+
+        if (conn.IsOptimisticUnchoked)
+        {
+            if (conn.LastUnchokedAt == null || (now - conn.LastUnchokedAt.Value).TotalSeconds <= 30)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsMutuallyIdle(PeerConnection conn, DateTime now)
+    {
+        var isZeroSpeed = (conn.DownloadRate + conn.UploadRate) == 0;
+        var inactiveTime = (now - conn.LastActivity).TotalSeconds;
+        return !conn.AmInterested && !conn.PeerInterested && isZeroSpeed && inactiveTime > 120;
+    }
+
+    private static bool IsSnubbedStalled(PeerConnection conn, DateTime now)
+    {
+        var idleBytesTime = (now - conn.LastBytesReceived).TotalSeconds;
+        return conn.AmInterested && !conn.PeerChoking && (conn.PendingRequestCount > 0 || conn.IsSnubbed) && idleBytesTime > 60;
+    }
+
+    private static bool IsUnreciprocatedUpload(PeerConnection conn)
+    {
+        return !conn.AmChoking && (conn.UploadRate > 0 || conn.BytesUploaded > 0) && conn.PeerChoking && conn.DownloadRate == 0;
+    }
+
+    private HashSet<string> ResolveLeecherInfoHashes(List<PeerConnection> connections)
+    {
+        var leechers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (connections == null || connections.Count == 0)
+        {
+            return leechers;
+        }
+
+        var hashes = connections
+            .Select(c => c.InfoHash)
+            .Where(h => !string.IsNullOrWhiteSpace(h))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (hashes.Count == 0)
+        {
+            return leechers;
+        }
+
+        try
+        {
+            var torrents = _torrentService.Value.GetByInfoHashes(hashes);
+            if (torrents == null)
+            {
+                return leechers;
+            }
+
+            foreach (var torrent in torrents)
+            {
+                if (torrent == null || torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(torrent.InfoHash))
+                {
+                    leechers.Add(torrent.InfoHash);
+                }
+
+                if (!string.IsNullOrWhiteSpace(torrent.InfoHashV2))
+                {
+                    leechers.Add(torrent.InfoHashV2);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to resolve torrent progress for dropout pruning");
+        }
+
+        return leechers;
+    }
+
     private Torrent ResolveTorrent(string infoHash)
     {
         if (string.IsNullOrWhiteSpace(infoHash))
@@ -723,7 +817,8 @@ public class ConnectionManager : IConnectionManager,
 
         try
         {
-            return _torrentService.Value.FindByInfoHash(infoHash) ?? _torrentService.Value.GetByInfoHash(infoHash);
+            // FindByInfoHash is GetByInfoHash. Calling both runs the query twice on a miss.
+            return _torrentService.Value.GetByInfoHash(infoHash);
         }
         catch
         {

@@ -1305,9 +1305,10 @@ public class ConnectionManagerTest
     {
         _configService.SimulationModeEnabled.Returns(false);
 
-        var torrent = new Torrent { InfoHash = "hash1", Progress = 0.5 };
+        var torrent = new Torrent { InfoHash = "hash1", Progress = 0.5, Status = TorrentStatus.Downloading };
         _torrentService.GetByInfoHash("hash1").Returns(torrent);
         _torrentService.FindByInfoHash("hash1").Returns(torrent);
+        _torrentService.GetByInfoHashes(Arg.Any<IEnumerable<string>>()).Returns(new List<Torrent> { torrent });
 
         var conn = CreateMockConnection("93.184.216.34");
         SetInfoHash(conn, "hash1");
@@ -1370,5 +1371,104 @@ public class ConnectionManagerTest
         _manager.RotateConnections();
 
         Assert.That(_manager.ActiveCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ProcessDropouts_does_not_prune_upload_peer_when_torrent_has_completed()
+    {
+        _configService.SimulationModeEnabled.Returns(false);
+        var fresh = new Torrent { InfoHash = "hash1", Progress = 1.0, Status = TorrentStatus.Seeding };
+        _torrentService.GetByInfoHash("hash1").Returns(fresh);
+        _torrentService.FindByInfoHash("hash1").Returns(fresh);
+        _torrentService.GetByInfoHashes(Arg.Any<IEnumerable<string>>()).Returns(new List<Torrent> { fresh });
+
+        var conn = CreateMockConnection("93.184.216.34");
+        SetInfoHash(conn, "hash1");
+        conn.MatchedTorrent = new Torrent { InfoHash = "hash1", Progress = 0.5, Status = TorrentStatus.Downloading };
+        conn.AmChoking = false;
+        conn.UploadRate = 20_000;
+        conn.PeerChoking = true;
+        conn.DownloadRate = 0;
+        conn.BytesUploaded = 1000;
+
+        _manager.Add(conn);
+        _manager.ProcessDropouts();
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ProcessDropouts_prunes_unreciprocated_uploader_using_current_progress_not_snapshot()
+    {
+        _configService.SimulationModeEnabled.Returns(false);
+        var fresh = new Torrent { InfoHash = "hash1", Progress = 0.4, Status = TorrentStatus.Downloading };
+        _torrentService.GetByInfoHash("hash1").Returns(fresh);
+        _torrentService.FindByInfoHash("hash1").Returns(fresh);
+        _torrentService.GetByInfoHashes(Arg.Any<IEnumerable<string>>()).Returns(new List<Torrent> { fresh });
+
+        var conn = CreateMockConnection("93.184.216.34");
+        SetInfoHash(conn, "hash1");
+        conn.MatchedTorrent = new Torrent { InfoHash = "hash1", Progress = 1.0, Status = TorrentStatus.Seeding };
+        conn.AmChoking = false;
+        conn.UploadRate = 20_000;
+        conn.PeerChoking = true;
+        conn.DownloadRate = 0;
+        conn.BytesUploaded = 1000;
+
+        _manager.Add(conn);
+        _manager.ProcessDropouts();
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ProcessDropouts_does_not_hold_connection_lock_during_torrent_lookup()
+    {
+        _configService.SimulationModeEnabled.Returns(false);
+        var entered = new ManualResetEventSlim(false);
+        var release = new ManualResetEventSlim(false);
+
+        _torrentService.GetByInfoHash("hash1").Returns(_ =>
+        {
+            entered.Set();
+            release.Wait(TimeSpan.FromSeconds(5));
+            return (Torrent)null;
+        });
+        _torrentService.GetByInfoHashes(Arg.Any<IEnumerable<string>>()).Returns(_ =>
+        {
+            entered.Set();
+            release.Wait(TimeSpan.FromSeconds(5));
+            return new List<Torrent>();
+        });
+
+        var conn = CreateMockConnection("93.184.216.34");
+        _manager.Add(conn);
+        SetInfoHash(conn, "hash1");
+        conn.AmChoking = false;
+        conn.UploadRate = 20_000;
+        conn.PeerChoking = true;
+        conn.DownloadRate = 0;
+
+        var dropout = Task.Run(() => _manager.ProcessDropouts());
+        Assert.That(entered.Wait(TimeSpan.FromSeconds(5)), Is.True, "torrent lookup was not reached");
+
+        var readerFinished = Task.Run(() => _manager.ActiveCount).Wait(TimeSpan.FromMilliseconds(500));
+        release.Set();
+        Assert.That(dropout.Wait(TimeSpan.FromSeconds(5)), Is.True);
+        Assert.That(readerFinished, Is.True, "ActiveCount blocked while the torrent lookup ran under the connection lock");
+    }
+
+    [Test]
+    public void Logging_a_connection_for_a_missing_torrent_looks_up_the_info_hash_once()
+    {
+        _torrentService.GetByInfoHash("missing").Returns((Torrent)null);
+        _torrentService.FindByInfoHash("missing").Returns((Torrent)null);
+
+        var conn = CreateMockConnection("93.184.216.34");
+        SetInfoHash(conn, "missing");
+        _manager.Add(conn);
+
+        _torrentService.Received(1).GetByInfoHash("missing");
+        _torrentService.DidNotReceive().FindByInfoHash(Arg.Any<string>());
     }
 }
