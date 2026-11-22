@@ -76,7 +76,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     private readonly ConcurrentDictionary<string, (string PeerId, string AnnounceKey)> _ephemeralIdentities = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<int, List<List<string>>> _torrentTierOrder = new();
     private readonly ConcurrentDictionary<string, byte> _sessionStarted = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentQueue<Torrent> _staggeredQueue = new();
+    private readonly ConcurrentQueue<int> _staggeredQueue = new();
     private readonly object _staggeredLock = new();
     private readonly Logger _logger;
     private CancellationTokenSource _staggeredCts;
@@ -250,6 +250,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     {
         var results = new List<TrackerAnnounceResult>();
         if (torrent == null || string.IsNullOrWhiteSpace(torrent.InfoHash))
+        {
+            return results;
+        }
+
+        if (!TryRefreshTorrent(torrent, eventType))
         {
             return results;
         }
@@ -561,8 +566,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             {
                 var oldStatus = torrent.Status;
                 torrent.Status = TorrentStatus.Paused;
+                torrent.Active = false;
+                torrent.UploadSpeed = 0;
+                torrent.DownloadSpeed = 0;
                 torrent.ErrorMessage = $"Circuit breaker tripped: {warningText}";
-                _torrentService?.Update(torrent);
+                PauseTorrent(torrent);
 
                 entry.Status = TrackerStatus.Disabled;
                 entry.Enabled = false;
@@ -629,7 +637,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                     torrent.Leechers = tr.Incomplete;
                 }
 
-                _torrentService?.Update(torrent);
+                PersistSwarmStats(torrent);
                 _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, TrackerStatus.Announcing, TrackerStatus.Working));
 
                 result.AnnounceInterval = interval;
@@ -740,6 +748,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         if (torrent == null || entry == null || string.IsNullOrWhiteSpace(entry.Url))
         {
             return new TrackerAnnounceResult { Success = false, FailureReason = "Invalid torrent or tracker" };
+        }
+
+        if (!TryRefreshTorrent(torrent, eventType))
+        {
+            return new TrackerAnnounceResult { Success = false, FailureReason = "Torrent is no longer active" };
         }
 
         if (_vpnKillSwitchService?.IsFailClosedActive == true)
@@ -971,8 +984,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         {
             var oldStatus = torrent.Status;
             torrent.Status = TorrentStatus.Paused;
+            torrent.Active = false;
+            torrent.UploadSpeed = 0;
+            torrent.DownloadSpeed = 0;
             torrent.ErrorMessage = $"Circuit breaker tripped: {warningText}";
-            _torrentService?.Update(torrent);
+            PauseTorrent(torrent);
 
             entry.Status = TrackerStatus.Disabled;
             entry.Enabled = false;
@@ -1036,7 +1052,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 torrent.Leechers = response.Incomplete;
             }
 
-            _torrentService?.Update(torrent);
+            PersistSwarmStats(torrent);
             _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, TrackerStatus.Announcing, TrackerStatus.Working));
 
             result.AnnounceInterval = interval;
@@ -1481,7 +1497,10 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             var list = torrents.ToList();
             foreach (var torrent in list)
             {
-                _staggeredQueue.Enqueue(torrent);
+                if (torrent != null && torrent.Id > 0)
+                {
+                    _staggeredQueue.Enqueue(torrent.Id);
+                }
             }
 
             _logger.Info("VPN restored: scheduling staggered announces for {0} torrents across rate-limited window.", list.Count);
@@ -1501,23 +1520,24 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         var totalWindowMs = Math.Clamp(count * 1000, 15000, 30000);
         var intervalMs = Math.Max(250, totalWindowMs / count);
 
-        while (_staggeredQueue.TryDequeue(out var torrent))
+        while (_staggeredQueue.TryDequeue(out var torrentId))
         {
             if (cancellationToken.IsCancellationRequested || _isVpnDown || _vpnKillSwitchService?.IsFailClosedActive == true)
             {
                 break;
             }
 
+            var torrent = _torrentService?.Get(torrentId);
             try
             {
-                if (!torrent.IsVpnPaused && (torrent.Status == TorrentStatus.Downloading || torrent.Status == TorrentStatus.Seeding))
+                if (torrent != null && !torrent.IsVpnPaused && (torrent.Status == TorrentStatus.Downloading || torrent.Status == TorrentStatus.Seeding))
                 {
                     await AnnounceTorrentAsync(torrent, force: true, cancellationToken: cancellationToken);
                 }
             }
             catch (Exception ex)
             {
-                _logger.Warn(ex, "Failed staggered announce for torrent {0}", torrent.Name);
+                _logger.Warn(ex, "Failed staggered announce for torrent {0}", torrent?.Name ?? torrentId.ToString(CultureInfo.InvariantCulture));
             }
 
             if (_staggeredQueue.IsEmpty)
@@ -1539,6 +1559,93 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 break;
             }
         }
+    }
+
+    private bool TryRefreshTorrent(Torrent torrent, AnnounceEvent eventType)
+    {
+        if (torrent == null || torrent.Id <= 0 || _torrentService == null)
+        {
+            return torrent != null;
+        }
+
+        var fresh = _torrentService.Get(torrent.Id);
+        if (fresh == null)
+        {
+            return true;
+        }
+
+        var callerStatus = torrent.Status;
+        OverlayPersistedState(torrent, fresh);
+
+        var intentionalTerminal = eventType == AnnounceEvent.Stopped || eventType == AnnounceEvent.Completed;
+        if (intentionalTerminal)
+        {
+            return true;
+        }
+
+        var nowTerminal = torrent.Status == TorrentStatus.Paused || torrent.Status == TorrentStatus.Stopped;
+        var callerTerminal = callerStatus == TorrentStatus.Paused || callerStatus == TorrentStatus.Stopped;
+        if (nowTerminal && !callerTerminal)
+        {
+            _logger.Debug("Skipping announce for torrent {0}: status is now {1}.", torrent.Name ?? torrent.InfoHash, torrent.Status);
+            return false;
+        }
+
+        return true;
+    }
+
+    private static void OverlayPersistedState(Torrent target, Torrent fresh)
+    {
+        target.Status = fresh.Status;
+        target.Uploaded = fresh.Uploaded;
+        target.Downloaded = fresh.Downloaded;
+        target.TotalSize = fresh.TotalSize;
+        target.Progress = fresh.Progress;
+        target.IsVpnPaused = fresh.IsVpnPaused;
+        target.IsPrivate = fresh.IsPrivate;
+        target.InfoHash = fresh.InfoHash;
+        target.Name = fresh.Name;
+        target.TrackerUrl = fresh.TrackerUrl;
+        target.Seeders = fresh.Seeders;
+        target.Leechers = fresh.Leechers;
+        target.Availability = fresh.Availability;
+        target.RealUploaded = fresh.RealUploaded;
+        target.IsSimulated = fresh.IsSimulated;
+        target.ClientProfile = fresh.ClientProfile;
+        target.Ratio = fresh.Ratio;
+        target.Active = fresh.Active;
+        target.ErrorMessage = fresh.ErrorMessage;
+        target.ForceCompleted = fresh.ForceCompleted;
+    }
+
+    private void PauseTorrent(Torrent torrent)
+    {
+        if (_torrentService == null || torrent == null || torrent.Id <= 0)
+        {
+            return;
+        }
+
+        _torrentService.UpdateExecutionStates(new[]
+        {
+            new TorrentExecutionWrite
+            {
+                Id = torrent.Id,
+                Status = (int)TorrentStatus.Paused,
+                Active = false,
+                UploadSpeed = 0,
+                DownloadSpeed = 0
+            }
+        });
+    }
+
+    private void PersistSwarmStats(Torrent torrent)
+    {
+        if (_torrentService == null || torrent == null || torrent.Id <= 0)
+        {
+            return;
+        }
+
+        _torrentService.UpdateSwarmStats(torrent.Id, torrent.Seeders, torrent.Leechers, null);
     }
 
     public void Dispose()

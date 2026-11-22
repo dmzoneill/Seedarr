@@ -50,7 +50,7 @@ public class SeedingService : ISeedingService
         torrent.Active = true;
         torrent.ForceStart = true;
         torrent.LastActive = DateTime.UtcNow;
-        _torrentService.Update(torrent);
+        PersistExecution(torrent);
 
         _logger.Info("Started seeding: {0}", torrent.Name);
         _eventAggregator.PublishEvent(new SeedingStartedEvent(torrentId));
@@ -72,7 +72,7 @@ public class SeedingService : ISeedingService
 
         torrent.Stop();
         torrent.ForceStart = false;
-        _torrentService.Update(torrent);
+        PersistExecution(torrent);
 
         _logger.Info("Stopped seeding: {0}", torrent.Name);
         _eventAggregator.PublishEvent(new SeedingStoppedEvent(torrentId));
@@ -92,7 +92,7 @@ public class SeedingService : ISeedingService
             torrent.Active = true;
             torrent.ForceStart = true;
             torrent.LastActive = DateTime.UtcNow;
-            _torrentService.Update(torrent);
+            PersistExecution(torrent);
 
             _logger.Info("Started seeding: {0}", torrent.Name);
             _eventAggregator.PublishEvent(new SeedingStartedEvent(torrent.Id));
@@ -112,7 +112,7 @@ public class SeedingService : ISeedingService
         {
             torrent.Stop();
             torrent.ForceStart = false;
-            _torrentService.Update(torrent);
+            PersistExecution(torrent);
 
             _logger.Info("Stopped seeding: {0}", torrent.Name);
             _eventAggregator.PublishEvent(new SeedingStoppedEvent(torrent.Id));
@@ -133,5 +133,24 @@ public class SeedingService : ISeedingService
             TotalDownloaded = all.Sum(t => t.Downloaded),
             AverageRatio = active.Count > 0 ? active.Average(t => t.Ratio) : 0
         };
+    }
+
+    private void PersistExecution(Torrent torrent)
+    {
+        _torrentService.UpdateExecutionStates(new[]
+        {
+            new TorrentExecutionWrite
+            {
+                Id = torrent.Id,
+                Status = (int)torrent.Status,
+                Active = torrent.Active,
+                UploadSpeed = torrent.UploadSpeed,
+                DownloadSpeed = torrent.DownloadSpeed,
+                SetLastActive = torrent.LastActive.HasValue ? 1 : 0,
+                LastActive = torrent.LastActive,
+                SetForceStart = 1,
+                ForceStart = torrent.ForceStart
+            }
+        });
     }
 }

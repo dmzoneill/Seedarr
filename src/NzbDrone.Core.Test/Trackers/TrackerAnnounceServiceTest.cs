@@ -823,7 +823,8 @@ public class TrackerAnnounceServiceTest
         Assert.That(result.Success, Is.False);
         Assert.That(result.WarningMessage, Is.EqualTo("Unrealistic upload rate detected - account flagged"));
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Status == TorrentStatus.Paused));
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+            writes.Any(w => w.Status == (int)TorrentStatus.Paused && !w.Active)));
 
         Assert.That(tracker.Enabled, Is.False);
         Assert.That(tracker.NextAnnounce, Is.Null);
@@ -876,7 +877,8 @@ public class TrackerAnnounceServiceTest
         Assert.That(result.Success, Is.False);
         Assert.That(result.WarningMessage, Is.EqualTo("Account flagged: seed speed throttled (anti-cheat)"));
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Status == TorrentStatus.Paused));
+        _torrentService.Received(1).UpdateExecutionStates(Arg.Is<IEnumerable<TorrentExecutionWrite>>(writes =>
+            writes.Any(w => w.Status == (int)TorrentStatus.Paused && !w.Active)));
 
         Assert.That(tracker.Enabled, Is.False);
         Assert.That(tracker.NextAnnounce, Is.Null);

@@ -103,11 +103,7 @@ public class TrackerScrapeServiceTests
             100,
             null);
 
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t =>
-            t.Id == torrentId &&
-            t.Seeders == 42 &&
-            t.Leechers == 13 &&
-            t.Availability >= 42.0));
+        _torrentService.Received(1).UpdateSwarmStats(torrentId, 42, 13, Arg.Is<double?>(a => a.HasValue && a.Value >= 42.0));
     }
 
     [Test]
@@ -182,7 +178,7 @@ public class TrackerScrapeServiceTests
             null);
 
         // Torrent 3 updated successfully
-        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 3 && t.Seeders == 25 && t.Leechers == 5));
+        _torrentService.Received(1).UpdateSwarmStats(3, 25, 5, Arg.Any<double?>());
     }
 
     [Test]

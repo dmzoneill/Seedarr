@@ -342,7 +342,6 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
                 var newStatus = torrent.Progress >= 1.0 ? TorrentStatus.Seeding : TorrentStatus.Downloading;
                 torrent.Status = newStatus;
                 torrent.LastActive = _clock.UtcNow;
-                _torrentService.Update(torrent);
                 if (newStatus == TorrentStatus.Downloading)
                 {
                     downloadingTorrents.Add(torrent);
@@ -382,7 +381,6 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
                         torrent.UploadSpeed = 0;
                         torrent.DownloadSpeed = 0;
                         downloadingTorrents.Remove(torrent);
-                        _torrentService.Update(torrent);
                         _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Downloading, TorrentStatus.Queued) { IsQueueManagerInternal = true });
                     }
                 }
@@ -407,7 +405,6 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
                         torrent.UploadSpeed = 0;
                         torrent.DownloadSpeed = 0;
                         seedingTorrents.Remove(torrent);
-                        _torrentService.Update(torrent);
                         _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Seeding, TorrentStatus.Queued) { IsQueueManagerInternal = true });
                     }
                 }
@@ -445,7 +442,6 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
                             seedingTorrents.Remove(torrent);
                         }
 
-                        _torrentService.Update(torrent);
                         _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Queued) { IsQueueManagerInternal = true });
                     }
                 }
@@ -496,7 +492,6 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
                     {
                         torrent.Status = TorrentStatus.Downloading;
                         torrent.LastActive = _clock.UtcNow;
-                        _torrentService.Update(torrent);
                         downloadingTorrents.Add(torrent);
                         _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Queued, TorrentStatus.Downloading) { IsQueueManagerInternal = true });
                     }
@@ -537,7 +532,6 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
 
                     torrent.Status = TorrentStatus.Seeding;
                     torrent.LastActive = _clock.UtcNow;
-                    _torrentService.Update(torrent);
                     seedingTorrents.Add(torrent);
                     _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Queued, TorrentStatus.Seeding) { IsQueueManagerInternal = true });
                     availableSeedSlots--;
@@ -575,25 +569,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
 
         if (downloadingTorrents.Count == 0 && seedingTorrents.Count == 0 && stalledTorrents.Count == 0)
         {
-            var idleToUpdate = new List<Torrent>();
-            foreach (var t in allTorrents)
-            {
-                if (t.UploadSpeed != 0 || t.DownloadSpeed != 0 || t.Active)
-                {
-                    t.UploadSpeed = 0;
-                    t.DownloadSpeed = 0;
-                    t.Active = false;
-                    _uploadSpeedHistory.Remove(t.Id);
-                    _downloadSpeedHistory.Remove(t.Id);
-                    idleToUpdate.Add(t);
-                }
-            }
-
-            if (idleToUpdate.Count > 0)
-            {
-                _torrentService.UpdateMany(idleToUpdate);
-            }
-
+            PersistTick(allTorrents, initialStatuses);
             _previousActiveTorrentIds.Clear();
             return;
         }
@@ -639,42 +615,13 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
 
         var recoveredTorrents = UpdateComputedFields(activeTorrents, thresholdPercent, actualDelta);
 
-        var dirtyTorrents = new List<Torrent>();
-        dirtyTorrents.AddRange(activeTorrents);
-
         if (stoppedByRatio != null && stoppedByRatio.Count > 0)
         {
             foreach (var t in stoppedByRatio)
             {
                 _uploadSpeedHistory.Remove(t.Id);
                 _downloadSpeedHistory.Remove(t.Id);
-                if (!dirtyTorrents.Any(d => d.Id == t.Id))
-                {
-                    dirtyTorrents.Add(t);
-                }
             }
-        }
-
-        foreach (var t in allTorrents.Where(t => t.Status != TorrentStatus.Seeding && t.Status != TorrentStatus.Downloading && t.Status != TorrentStatus.StalledNoSeeds))
-        {
-            var statusChanged = initialStatuses.TryGetValue(t.Id, out var initialStatus) && initialStatus != t.Status;
-            if (t.UploadSpeed != 0 || t.DownloadSpeed != 0 || t.Active || statusChanged)
-            {
-                t.UploadSpeed = 0;
-                t.DownloadSpeed = 0;
-                t.Active = false;
-                _uploadSpeedHistory.Remove(t.Id);
-                _downloadSpeedHistory.Remove(t.Id);
-                if (!dirtyTorrents.Any(d => d.Id == t.Id))
-                {
-                    dirtyTorrents.Add(t);
-                }
-            }
-        }
-
-        if (dirtyTorrents.Count > 0)
-        {
-            _torrentService.UpdateMany(dirtyTorrents);
         }
 
         var activeIds = new HashSet<int>(activeTorrents.Select(t => t.Id));
@@ -842,6 +789,8 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
         {
             _previousActiveTorrentIds.Add(t.Id);
         }
+
+        PersistTick(allTorrents, initialStatuses);
     }
 
     private static long RemainingBytes(Torrent torrent)
@@ -1096,8 +1045,8 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
     {
         torrent.SuperSeeding = false;
 
-        _torrentRepository?.Update(torrent);
-        _torrentService?.Update(torrent);
+        _torrentRepository?.UpdateSuperSeeding(torrent.Id, false);
+        _torrentService?.UpdateSuperSeeding(torrent.Id, false);
 
         var message = $"Super-seeding completed: {reason}";
         _eventLogService?.Info(torrent.Id, "SuperSeeding", message);
@@ -1222,34 +1171,126 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
             return;
         }
 
+        var infoHash = torrent.InfoHash;
+        var name = torrent.Name;
+        var torrentId = torrent.Id;
+
         if (_dhtService != null)
         {
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    await _dhtService.AnnounceTorrent(torrent.InfoHash, LocalListenPort);
+                    await _dhtService.AnnounceTorrent(infoHash, LocalListenPort);
                 }
                 catch (Exception ex)
                 {
-                    _logger.Debug(ex, "Failed to dispatch DHT announce for extinct torrent {0}", torrent.Name);
+                    _logger.Debug(ex, "Failed to dispatch DHT announce for extinct torrent {0}", name);
                 }
             });
         }
 
         if (_trackerAnnounceService != null)
         {
-            _ = Task.Run(() =>
+            _ = Task.Run(async () =>
             {
                 try
                 {
-                    _trackerAnnounceService.AnnounceTorrent(torrent, force: true);
+                    var current = _torrentService?.Get(torrentId);
+                    if (current == null || current.Status == TorrentStatus.Paused || current.Status == TorrentStatus.Stopped)
+                    {
+                        return;
+                    }
+
+                    await _trackerAnnounceService.AnnounceTorrentAsync(current, force: true);
                 }
                 catch (Exception ex)
                 {
-                    _logger.Debug(ex, "Failed to dispatch tracker re-announce for extinct torrent {0}", torrent.Name);
+                    _logger.Debug(ex, "Failed to dispatch tracker re-announce for extinct torrent {0}", name);
                 }
             });
         }
+    }
+
+    private void PersistTick(List<Torrent> allTorrents, Dictionary<int, TorrentStatus> initialStatuses)
+    {
+        var transitions = new List<TorrentStatusTransition>();
+        var runtime = new List<TorrentRuntimeWrite>();
+        var clearIds = new List<int>();
+
+        foreach (var torrent in allTorrents.OrderBy(t => t.Id))
+        {
+            var statusChanged = initialStatuses.TryGetValue(torrent.Id, out var initial) && initial != torrent.Status;
+            var runtimeStatus = torrent.Status == TorrentStatus.Seeding
+                || torrent.Status == TorrentStatus.Downloading
+                || torrent.Status == TorrentStatus.StalledNoSeeds;
+
+            if (statusChanged)
+            {
+                transitions.Add(new TorrentStatusTransition
+                {
+                    Id = torrent.Id,
+                    ExpectedStatus = (int)initial,
+                    Status = (int)torrent.Status,
+                    Active = runtimeStatus && torrent.Active,
+                    UploadSpeed = runtimeStatus ? torrent.UploadSpeed : 0,
+                    DownloadSpeed = runtimeStatus ? torrent.DownloadSpeed : 0,
+                    LastActive = torrent.LastActive
+                });
+            }
+
+            if (runtimeStatus || statusChanged)
+            {
+                runtime.Add(ToRuntimeWrite(torrent, runtimeStatus));
+            }
+            else if (torrent.UploadSpeed != 0 || torrent.DownloadSpeed != 0 || torrent.Active)
+            {
+                torrent.UploadSpeed = 0;
+                torrent.DownloadSpeed = 0;
+                torrent.Active = false;
+                _uploadSpeedHistory.Remove(torrent.Id);
+                _downloadSpeedHistory.Remove(torrent.Id);
+                clearIds.Add(torrent.Id);
+            }
+        }
+
+        if (transitions.Count > 0)
+        {
+            _torrentService.TryTransitionStatuses(transitions);
+        }
+
+        if (runtime.Count > 0)
+        {
+            _torrentService.UpdateRuntimeStats(runtime);
+        }
+
+        if (clearIds.Count > 0)
+        {
+            _torrentService.ClearActivity(clearIds);
+        }
+    }
+
+    private static TorrentRuntimeWrite ToRuntimeWrite(Torrent torrent, bool runtimeStatus)
+    {
+        return new TorrentRuntimeWrite
+        {
+            Id = torrent.Id,
+            ExpectedStatus = (int)torrent.Status,
+            Uploaded = torrent.Uploaded,
+            Downloaded = torrent.Downloaded,
+            SessionUploaded = torrent.SessionUploaded,
+            SessionDownloaded = torrent.SessionDownloaded,
+            UploadSpeed = runtimeStatus ? torrent.UploadSpeed : 0,
+            DownloadSpeed = runtimeStatus ? torrent.DownloadSpeed : 0,
+            Progress = torrent.Progress,
+            Eta = runtimeStatus ? torrent.Eta : 0,
+            SeedingTime = torrent.SeedingTime,
+            LastActive = torrent.LastActive,
+            Active = runtimeStatus && torrent.Active,
+            Seeders = torrent.Seeders,
+            Leechers = torrent.Leechers,
+            Availability = torrent.Availability,
+            Threshold = torrent.Threshold
+        };
     }
 }
