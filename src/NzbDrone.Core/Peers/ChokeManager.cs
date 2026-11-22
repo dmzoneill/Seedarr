@@ -813,15 +813,15 @@ public class ChokeManager : BackgroundService, IChokeManager
         }
 
         var isPeerValid = slot != null &&
-                          slot.Peer != null &&
-                          !ReferenceEquals(slot.Peer, excludedPeer) &&
-                          slot.Peer.IsOptimisticUnchoked &&
-                          !slot.Peer.AmChoking &&
-                          slot.Peer.PeerInterested &&
-                          !slot.Peer.IsSeed &&
-                          !slot.Peer.IsPartialSeed &&
-                          slot.Peer.HasMissingWantedPieces &&
-                          swarmConnections.Contains(slot.Peer);
+            slot.Peer != null &&
+            !ReferenceEquals(slot.Peer, excludedPeer) &&
+            slot.Peer.IsOptimisticUnchoked &&
+            !slot.Peer.AmChoking &&
+            slot.Peer.PeerInterested &&
+            !slot.Peer.IsSeed &&
+            !slot.Peer.IsPartialSeed &&
+            slot.Peer.HasMissingWantedPieces &&
+            swarmConnections.Contains(slot.Peer);
 
         PeerConnection previousPeer = null;
 
