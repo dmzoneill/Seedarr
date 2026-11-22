@@ -1101,10 +1101,13 @@ public class SeedingEngineTest
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
         _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
             .Returns(new long[] { 100 });
+        _distributionManager.DistributeDownloadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 100_000 });
 
         CallTick();
 
         Assert.That(torrent.Downloaded, Is.GreaterThan(500_000));
+        Assert.That(torrent.Downloaded, Is.LessThanOrEqualTo(torrent.TotalSize));
     }
 
     [Test]

@@ -1277,10 +1277,11 @@ public class SpeedPolicyTest
 
         _subject.ProcessDownloading(torrents, new SpeedLimits { MaxDownloadSpeed = SpeedLimits.Unlimited }, TimeSpan.FromSeconds(1));
 
-        // Base unlimited speed is 1_000_000_000L scaled by priority weight
-        Assert.That(highPriorityTorrent.Downloaded, Is.EqualTo(2_000_000_000L));
-        Assert.That(normalPriorityTorrent.Downloaded, Is.EqualTo(1_000_000_000L));
-        Assert.That(lowPriorityTorrent.Downloaded, Is.EqualTo(500_000_000L));
+        // Unlimited is a client-realistic per-torrent rate scaled by priority, not 1 GB/s.
+        Assert.That(highPriorityTorrent.Downloaded, Is.EqualTo(2 * SpeedPolicy.DefaultUnlimitedDownloadPerTorrentBps));
+        Assert.That(normalPriorityTorrent.Downloaded, Is.EqualTo(SpeedPolicy.DefaultUnlimitedDownloadPerTorrentBps));
+        Assert.That(lowPriorityTorrent.Downloaded, Is.EqualTo(SpeedPolicy.DefaultUnlimitedDownloadPerTorrentBps / 2));
+        Assert.That(highPriorityTorrent.Downloaded, Is.LessThan(50L * 1024 * 1024));
 
         _distributionManager.DidNotReceive().DistributeDownloadSpeeds(Arg.Any<int>(), Arg.Any<long>(), Arg.Any<double[]>());
     }
