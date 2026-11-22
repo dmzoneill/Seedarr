@@ -1,11 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Backup;
 using NzbDrone.Core.Notifications;
+using NzbDrone.Core.Notifications.Discord;
+using NzbDrone.Core.Notifications.Pushover;
+using NzbDrone.Core.Notifications.Telegram;
+using NzbDrone.Core.Notifications.Webhook;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Notifications;
@@ -739,5 +745,70 @@ public class NotificationEventHandlerTest
         Assert.That(success, Is.False);
         await _customScriptService.DidNotReceive()
             .ExecuteScriptAsync(Arg.Any<string>(), Arg.Any<Torrent>(), Arg.Any<string>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void Notification_http_clients_time_out_within_ten_seconds()
+    {
+        AssertTimeout(typeof(TelegramNotification));
+        AssertTimeout(typeof(DiscordNotification));
+        AssertTimeout(typeof(PushoverNotification));
+        AssertTimeout(typeof(TelegramUpdateHandler));
+        AssertTimeout(typeof(TelegramPollingService));
+        AssertTimeout(typeof(TelegramBotLifecycle));
+        AssertTimeout(typeof(WebhookNotification));
+        AssertTimeout(typeof(DiscordInteractionHandler));
+    }
+
+    [Test]
+    public async Task EnqueueDispatch_drops_waiting_work_on_dispose_without_throwing()
+    {
+        var handler = new NotificationEventHandler(
+            _notificationRepository,
+            _webhookDispatcher,
+            _customScriptService,
+            maxConcurrentDispatches: 1);
+
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = handler.EnqueueDispatch(
+            async () =>
+            {
+                entered.TrySetResult();
+                await release.Task.ConfigureAwait(false);
+            },
+            "OnGrab",
+            "Webhook");
+
+        Assert.That(await Task.WhenAny(entered.Task, Task.Delay(2000)), Is.SameAs(entered.Task));
+
+        var ran = false;
+        var second = handler.EnqueueDispatch(
+            () =>
+            {
+                ran = true;
+                return Task.CompletedTask;
+            },
+            "OnGrab",
+            "Webhook");
+
+        await Task.Delay(50);
+        handler.Dispose();
+
+        var finished = await Task.WhenAny(second, Task.Delay(2000));
+        Assert.That(finished, Is.SameAs(second));
+        Assert.DoesNotThrow(() => second.GetAwaiter().GetResult());
+        Assert.That(ran, Is.False);
+
+        release.TrySetResult();
+        await first;
+    }
+
+    private static void AssertTimeout(Type type)
+    {
+        var field = type.GetField("SharedHttpClient", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.That(field, Is.Not.Null, type.Name);
+        var client = (HttpClient)field.GetValue(null);
+        Assert.That(client.Timeout, Is.EqualTo(NotificationHttp.Timeout), type.Name);
     }
 }

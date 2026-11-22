@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Threading;
 using NLog;
 
 namespace NzbDrone.Core.Notifications.Pushover;
@@ -13,7 +14,10 @@ public class PushoverNotification : INotificationService
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(10),
         AllowAutoRedirect = false,
-    });
+    })
+    {
+        Timeout = NotificationHttp.Timeout
+    };
 
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
@@ -152,7 +156,7 @@ public class PushoverNotification : INotificationService
 
             using var formData = new FormUrlEncodedContent(formPairs);
             using var request = new HttpRequestMessage(HttpMethod.Post, PushoverApiUrl) { Content = formData };
-            using var response = _httpClient.Send(request);
+            using var response = _httpClient.SendAsync(request, CancellationToken.None).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
             {
                 throw new HttpRequestException($"Pushover notification failed with HTTP {(int)response.StatusCode} {response.StatusCode}", null, response.StatusCode);
