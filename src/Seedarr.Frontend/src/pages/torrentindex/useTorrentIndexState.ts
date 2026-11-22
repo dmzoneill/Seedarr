@@ -24,6 +24,29 @@ export interface TagGroupItem {
   count: number;
 }
 
+/**
+ * Toggle selection for the ids currently in view.
+ * Membership decides the toggle: a selection of the same size made of
+ * different ids is not treated as "already selected".
+ * When every requested id is already selected, those ids are removed and
+ * any selection outside the list is kept.
+ */
+export function selectionAfterSelectAll(
+  previous: ReadonlySet<number>,
+  ids: readonly number[],
+): Set<number> {
+  const allMembersSelected =
+    ids.length > 0 && ids.every((id) => previous.has(id));
+  if (!allMembersSelected) {
+    return new Set(ids);
+  }
+  const next = new Set(previous);
+  for (const id of ids) {
+    next.delete(id);
+  }
+  return next;
+}
+
 function getInitialViewMode(): ViewMode {
   const stored = localStorage.getItem("seedarr-view-mode");
   return stored === "grid" ? "grid" : "table";
@@ -412,9 +435,7 @@ export function useTorrentIndexState() {
   }
 
   function handleSelectAll(ids: number[]) {
-    setSelectedIds((prev) =>
-      prev.size === ids.length ? new Set() : new Set(ids),
-    );
+    setSelectedIds((prev) => selectionAfterSelectAll(prev, ids));
   }
 
   const anchorIndexRef = useRef<number | null>(null);
