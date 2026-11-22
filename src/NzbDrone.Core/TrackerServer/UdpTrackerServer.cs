@@ -425,7 +425,7 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, ID
 
         _peerDatabase.IncrementAnnounces();
 
-        var peers = _peerDatabase.GetPeers(infoHash);
+        var peers = TrackerPeerVisibility.ExcludeHiddenLoopback(_peerDatabase.GetPeers(infoHash), peerIp);
         var isIpv6Client = clientAddress.AddressFamily == AddressFamily.InterNetworkV6;
         var compactPeers = isIpv6Client
             ? BuildCompactPeers6(peers, peerIp, peerPort, numWant)
@@ -554,11 +554,6 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, ID
                 continue;
             }
 
-            if (TrackerPeerVisibility.IsHiddenLoopback(peer.Ip, excludeIp))
-            {
-                continue;
-            }
-
             if (peer.Port == excludePort && (peer.Ip == excludeIp || (excludeAddr != null && addr.Equals(excludeAddr))))
             {
                 continue;
@@ -601,11 +596,6 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, ID
             }
 
             if (addr.IsIPv4MappedToIPv6 || addr.AddressFamily != AddressFamily.InterNetworkV6)
-            {
-                continue;
-            }
-
-            if (TrackerPeerVisibility.IsHiddenLoopback(peer.Ip, excludeIp))
             {
                 continue;
             }

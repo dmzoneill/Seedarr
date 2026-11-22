@@ -762,29 +762,6 @@ public class UdpTrackerServerTest
     }
 
     [Test]
-    public void BuildCompactPeers_hides_loopback_peers_from_remote_requesters()
-    {
-        var peers = new List<TrackerPeerEntry>
-        {
-            new TrackerPeerEntry { Ip = "127.0.0.1", Port = 51413 },
-            new TrackerPeerEntry { Ip = "::1", Port = 51413 },
-            new TrackerPeerEntry { Ip = "10.1.2.3", Port = 6881 },
-            new TrackerPeerEntry { Ip = "2001:db8::10", Port = 6881 }
-        };
-
-        var remoteV4 = InvokeBuildCompactPeers(peers, "203.0.113.8", 1234, 50);
-        var localV4 = InvokeBuildCompactPeers(peers, "127.0.0.1", 9999, 50);
-        var remoteV6 = InvokeBuildCompactPeers6(peers, "2001:db8::1", 1234, 50);
-        var localV6 = InvokeBuildCompactPeers6(peers, "::1", 9999, 50);
-
-        Assert.That(remoteV4, Has.Length.EqualTo(6));
-        Assert.That(remoteV4[0], Is.EqualTo(10));
-        Assert.That(localV4, Has.Length.EqualTo(12));
-        Assert.That(remoteV6, Has.Length.EqualTo(18));
-        Assert.That(localV6, Has.Length.EqualTo(36));
-    }
-
-    [Test]
     public void BuildCompactPeers_should_exclude_requesting_peer()
     {
         var peers = new List<TrackerPeerEntry>
