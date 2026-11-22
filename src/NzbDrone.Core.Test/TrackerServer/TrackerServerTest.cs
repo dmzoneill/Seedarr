@@ -324,6 +324,26 @@ public class TrackerServerTest
     }
 
     [Test]
+    public void BuildCompactPeers_hides_loopback_peers_from_remote_requesters()
+    {
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "127.0.0.1", Port = 51413 },
+            new TrackerPeerEntry { Ip = "10.1.2.3", Port = 6881 }
+        };
+
+        var remote = InvokeBuildCompactPeers(peers, "203.0.113.8", 1234, 50);
+        var local = InvokeBuildCompactPeers(peers, "127.0.0.1", 9999, 50);
+        var dictionary = InvokeBuildDictionaryPeers(peers, "203.0.113.8", 1234, 50);
+
+        Assert.That(remote, Has.Length.EqualTo(6));
+        Assert.That(remote[0], Is.EqualTo(10));
+        Assert.That(local, Has.Length.EqualTo(12));
+        Assert.That(dictionary, Has.Count.EqualTo(1));
+        Assert.That(((BString)((BDictionary)dictionary[0])["ip"]).ToString(), Is.EqualTo("10.1.2.3"));
+    }
+
+    [Test]
     public void BuildCompactPeers_should_not_exclude_same_ip_different_port()
     {
         var peers = new List<TrackerPeerEntry>

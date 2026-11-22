@@ -604,7 +604,7 @@ public class SeedingEngineTest
 
         CallTick();
 
-        _peerDatabase.Received().AddPeer("abc123", "127.0.0.1", 6881, Arg.Any<string>());
+        _peerDatabase.Received().AddPeer("abc123", "127.0.0.1", 6881, Arg.Any<string>(), 0L, null);
     }
 
     [Test]
@@ -624,7 +624,7 @@ public class SeedingEngineTest
 
         CallTick();
 
-        _peerDatabase.DidNotReceive().AddPeer(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>());
+        _peerDatabase.DidNotReceive().AddPeer(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<string>());
     }
 
     [Test]
@@ -2984,5 +2984,96 @@ public class SeedingEngineTest
             tickMethod.Invoke(engine, null);
             Assert.That(engine.LocalPeerId, Is.EqualTo(initialPeerId), "Peer ID must not be regenerated on subsequent ticks");
         }
+    }
+
+    [Test]
+    public void Tick_registers_self_on_configured_port_with_real_bytes_left()
+    {
+        _configService.ListeningPort.Returns(51413);
+        var downloading = new Torrent
+        {
+            Id = 7,
+            Status = TorrentStatus.Downloading,
+            TotalSize = 1000,
+            Downloaded = 250,
+            Progress = 0.25,
+            InfoHash = "downhash"
+        };
+        var seeding = new Torrent
+        {
+            Id = 8,
+            Status = TorrentStatus.Seeding,
+            TotalSize = 1000,
+            Downloaded = 1000,
+            Progress = 1.0,
+            InfoHash = "seedhash"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { downloading, seeding });
+        _distributionManager.DistributeDownloadSpeeds(Arg.Any<int>(), Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 100 });
+        _distributionManager.DistributeUploadSpeeds(Arg.Any<int>(), Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 100 });
+
+        using var database = new PeerDatabase(TimeSpan.Zero);
+        var engine = new SeedingEngine(
+            _torrentService,
+            _distributionManager,
+            _speedScheduler,
+            _configService,
+            _eventAggregator,
+            database,
+            _connectionManager,
+            _eventLogService);
+
+        engine.TickForTesting(TimeSpan.FromSeconds(1));
+
+        var downloadingPeers = database.GetPeers("downhash");
+        var seedingPeers = database.GetPeers("seedhash");
+        var downloadingStats = database.GetStats("downhash");
+        var seedingStats = database.GetStats("seedhash");
+
+        Assert.That(downloadingPeers, Has.Count.EqualTo(1));
+        Assert.That(downloadingPeers[0].Ip, Is.EqualTo("127.0.0.1"));
+        Assert.That(downloadingPeers[0].Port, Is.EqualTo(51413));
+        Assert.That(downloading.Downloaded, Is.GreaterThan(250));
+        Assert.That(downloadingPeers[0].Left, Is.EqualTo(downloading.TotalSize - downloading.Downloaded));
+        Assert.That(downloadingPeers[0].Left, Is.GreaterThan(0));
+        Assert.That(downloadingPeers[0].IsSeeder, Is.False);
+        Assert.That(downloadingStats.Complete, Is.EqualTo(0));
+        Assert.That(downloadingStats.Incomplete, Is.EqualTo(1));
+
+        Assert.That(seedingPeers, Has.Count.EqualTo(1));
+        Assert.That(seedingPeers[0].Port, Is.EqualTo(51413));
+        Assert.That(seedingPeers[0].Left, Is.EqualTo(0));
+        Assert.That(seedingPeers[0].IsSeeder, Is.True);
+        Assert.That(seedingStats.Complete, Is.EqualTo(1));
+        Assert.That(seedingStats.Incomplete, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task TriggerDiscoveryRetry_announces_the_configured_listening_port()
+    {
+        _configService.ListeningPort.Returns(51413);
+        var announcedPort = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _dhtService.AnnounceTorrent(Arg.Any<string>(), Arg.Any<int>())
+            .Returns(call =>
+            {
+                announcedPort.TrySetResult(call.ArgAt<int>(1));
+                return Task.CompletedTask;
+            });
+
+        var torrent = new Torrent
+        {
+            InfoHash = "abc123def456abc123def456abc123def456abcd",
+            Name = "Extinct",
+            Status = TorrentStatus.Downloading
+        };
+        var method = typeof(SeedingEngine).GetMethod("TriggerDiscoveryRetry", BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_engine, new object[] { torrent });
+
+        var completed = await Task.WhenAny(announcedPort.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+
+        Assert.That(completed, Is.SameAs(announcedPort.Task));
+        Assert.That(await announcedPort.Task, Is.EqualTo(51413));
     }
 }

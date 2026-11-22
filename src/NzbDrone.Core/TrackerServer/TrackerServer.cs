@@ -910,6 +910,11 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
                 continue;
             }
 
+            if (TrackerPeerVisibility.IsHiddenLoopback(peer.Ip, excludeIp))
+            {
+                continue;
+            }
+
             if (peer.Port == excludePort && (peer.Ip == excludeIp || (excludeAddr != null && addr.Equals(excludeAddr))))
             {
                 continue;
@@ -955,6 +960,11 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
                 continue;
             }
 
+            if (TrackerPeerVisibility.IsHiddenLoopback(peer.Ip, excludeIp))
+            {
+                continue;
+            }
+
             if (peer.Port == excludePort && (peer.Ip == excludeIp || (excludeAddr != null && addr.Equals(excludeAddr))))
             {
                 continue;
@@ -989,6 +999,11 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
 
         var filtered = peers.Where(p =>
         {
+            if (TrackerPeerVisibility.IsHiddenLoopback(p.Ip, excludeIp))
+            {
+                return false;
+            }
+
             if (p.Port == excludePort)
             {
                 if (p.Ip == excludeIp)

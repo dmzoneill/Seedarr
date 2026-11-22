@@ -27,9 +27,16 @@ namespace NzbDrone.Core.Seeding;
 
 public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownRequested>
 {
-    private const int LocalPeerPort = 6881;
-
     private TimeSpan TickInterval => TimeSpan.FromSeconds(Math.Max(1, _configService.UiRefreshRateSec));
+
+    private int LocalListenPort
+    {
+        get
+        {
+            var configured = _configService?.ListeningPort ?? 0;
+            return configured > 0 ? configured : 6881;
+        }
+    }
 
     private readonly ITorrentService _torrentService;
     private readonly ITorrentRepository _torrentRepository;
@@ -817,7 +824,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
                     ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
                     : null;
                 var peerId = session?.PeerId ?? _localPeerId;
-                _peerDatabase.AddPeer(torrent.InfoHash, "127.0.0.1", LocalPeerPort, peerId);
+                _peerDatabase.AddPeer(torrent.InfoHash, "127.0.0.1", LocalListenPort, peerId, RemainingBytes(torrent));
             }
         }
 
@@ -829,6 +836,16 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
         {
             _previousActiveTorrentIds.Add(t.Id);
         }
+    }
+
+    private static long RemainingBytes(Torrent torrent)
+    {
+        if (torrent == null || torrent.Status == TorrentStatus.Seeding || torrent.Progress >= 1.0)
+        {
+            return 0;
+        }
+
+        return Math.Max(0, torrent.TotalSize - torrent.Downloaded);
     }
 
     internal static double CalculateExponentialMovingAverage(long instantSpeed, double currentEma, double elapsedSeconds, double tau = 3.0)
@@ -1178,7 +1195,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
             {
                 try
                 {
-                    await _dhtService.AnnounceTorrent(torrent.InfoHash, LocalPeerPort);
+                    await _dhtService.AnnounceTorrent(torrent.InfoHash, LocalListenPort);
                 }
                 catch (Exception ex)
                 {

@@ -554,6 +554,11 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, ID
                 continue;
             }
 
+            if (TrackerPeerVisibility.IsHiddenLoopback(peer.Ip, excludeIp))
+            {
+                continue;
+            }
+
             if (peer.Port == excludePort && (peer.Ip == excludeIp || (excludeAddr != null && addr.Equals(excludeAddr))))
             {
                 continue;
@@ -596,6 +601,11 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, ID
             }
 
             if (addr.IsIPv4MappedToIPv6 || addr.AddressFamily != AddressFamily.InterNetworkV6)
+            {
+                continue;
+            }
+
+            if (TrackerPeerVisibility.IsHiddenLoopback(peer.Ip, excludeIp))
             {
                 continue;
             }
