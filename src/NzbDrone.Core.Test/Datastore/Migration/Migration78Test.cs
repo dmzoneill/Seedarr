@@ -42,6 +42,7 @@ public class Migration78Test
         Assert.That(attr, Is.Not.Null);
         Assert.That(attr.Version, Is.EqualTo(78));
         Assert.That(NzbDroneMigrationBase.LatestMigration, Is.GreaterThanOrEqualTo(78));
+        Assert.DoesNotThrow(() => new SeedClientProfileDefinitions().Down());
     }
 
     [Test]

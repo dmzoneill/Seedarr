@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NSubstitute;
@@ -76,6 +77,71 @@ public class ClientProfileFactoryTest
             "BiglyBTProfile"
         }));
         Assert.That(result.Select(p => p.GetType().Name), Does.Not.Contain("QBittorrentProfile"));
+    }
+
+    [Test]
+    public void GetAvailableProviders_uses_built_ins_when_definitions_or_the_container_fail()
+    {
+        _repository.All().Returns(_ => throw new InvalidOperationException("definitions unavailable"));
+        _serviceFactory.BuildAll<IClientProfile>().Returns(_ => throw new InvalidOperationException("container unavailable"));
+
+        var result = _subject.GetAvailableProviders();
+
+        Assert.That(result.Select(p => p.GetType().Name), Is.EquivalentTo(new[]
+        {
+            "QBittorrentProfile",
+            "DelugeProfile",
+            "TransmissionProfile",
+            "UTorrentProfile",
+            "BiglyBTProfile"
+        }));
+    }
+
+    [Test]
+    public void GetAvailableProviders_returns_built_ins_when_seeding_fails()
+    {
+        _repository.All().Returns(new List<ClientProfileDefinition>());
+        _repository.Insert(Arg.Any<ClientProfileDefinition>()).Returns(_ => throw new InvalidOperationException("cannot insert"));
+        _serviceFactory.BuildAll<IClientProfile>().Returns((IEnumerable<IClientProfile>)null);
+
+        var result = _subject.GetAvailableProviders();
+
+        Assert.That(result, Has.Count.EqualTo(5));
+        _repository.Received(5).Insert(Arg.Any<ClientProfileDefinition>());
+    }
+
+    [Test]
+    public void GetAvailableProviders_skips_null_definitions_and_duplicate_instances()
+    {
+        _repository.All().Returns(new List<ClientProfileDefinition>
+        {
+            null,
+            new() { Name = "Other", Implementation = "Transmission 3.00", Enable = true }
+        });
+        _serviceFactory.BuildAll<IClientProfile>().Returns(new List<IClientProfile>
+        {
+            null,
+            new TransmissionProfile(),
+            new TransmissionProfile()
+        });
+
+        var result = _subject.GetAvailableProviders();
+
+        Assert.That(result.Select(p => p.GetType().Name), Is.EqualTo(new[] { "TransmissionProfile" }));
+    }
+
+    [Test]
+    public void GetAvailableProviders_matches_a_definition_by_display_name()
+    {
+        _repository.All().Returns(new List<ClientProfileDefinition>
+        {
+            new() { Name = "Deluge 2.0.3", Implementation = "not-a-type", Enable = true }
+        });
+        _serviceFactory.BuildAll<IClientProfile>().Returns(new List<IClientProfile>());
+
+        var result = _subject.GetAvailableProviders();
+
+        Assert.That(result.Select(p => p.Name), Is.EqualTo(new[] { "Deluge 2.0.3" }));
     }
 
     [Test]

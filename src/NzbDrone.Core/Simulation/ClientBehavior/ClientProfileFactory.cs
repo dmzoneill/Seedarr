@@ -36,7 +36,7 @@ public class ClientProfileFactory : ProviderFactory<IClientProfile, ClientProfil
         try
         {
             EnsureDefaultProfiles();
-            definitions = All();
+            definitions = All() ?? new List<ClientProfileDefinition>();
         }
         catch (Exception ex)
         {

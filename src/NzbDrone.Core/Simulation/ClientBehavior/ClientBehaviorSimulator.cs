@@ -469,7 +469,7 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
         if (!string.IsNullOrWhiteSpace(clientName))
         {
             var match = available.FirstOrDefault(p =>
-                p.Name != null && p.Name.StartsWith(clientName, StringComparison.OrdinalIgnoreCase));
+                p != null && p.Name != null && p.Name.StartsWith(clientName, StringComparison.OrdinalIgnoreCase));
 
             if (match != null)
             {
@@ -477,14 +477,9 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
             }
         }
 
-        if (available.Count == 0)
-        {
-            _logger.Debug("No client profiles configured, using fallback profile: {0}", FallbackProfile.Name);
-            return FallbackProfile;
-        }
-
-        _logger.Warn("No client profile matching '{0}', using first available: {1}", clientName, available[0].Name);
-        return available[0] ?? FallbackProfile;
+        var fallback = available.FirstOrDefault(p => p != null) ?? FallbackProfile;
+        _logger.Warn("No client profile matching '{0}', using first available: {1}", clientName, fallback.Name);
+        return fallback;
     }
 
     private IReadOnlyList<IClientProfile> GetSelectableProfiles()
