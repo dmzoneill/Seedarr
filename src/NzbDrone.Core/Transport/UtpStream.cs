@@ -67,25 +67,19 @@ public class UtpStream : Stream
             return 0;
         }
 
-        if (_readTimeout > 0)
+        // Receive already honors timeoutMs and returns when it elapses. Waiting on a
+        // separate task leaves that Receive running, so it later writes into this buffer
+        // (including an ArrayPool buffer ReadAsync has already returned) and consumes
+        // bytes the next read should have seen.
+        var startTime = Environment.TickCount64;
+        var timeout = _readTimeout > 0 ? _readTimeout : -1;
+        var bytesRead = _connection.Receive(buffer, offset, count, timeout);
+        if (bytesRead == 0 && _connection.IsConnected && timeout > 0 && (Environment.TickCount64 - startTime) >= timeout)
         {
-            var startTime = Environment.TickCount64;
-            var readTask = Task.Run(() => _connection.Receive(buffer, offset, count));
-            if (!readTask.Wait(_readTimeout))
-            {
-                throw new TimeoutException($"Read timed out after {_readTimeout} ms.");
-            }
-
-            var bytesRead = readTask.Result;
-            if (bytesRead == 0 && _connection.IsConnected && (Environment.TickCount64 - startTime) >= _readTimeout)
-            {
-                throw new TimeoutException($"Read timed out after {_readTimeout} ms.");
-            }
-
-            return bytesRead;
+            throw new TimeoutException($"Read timed out after {_readTimeout} ms.");
         }
 
-        return _connection.Receive(buffer, offset, count);
+        return bytesRead;
     }
 
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
