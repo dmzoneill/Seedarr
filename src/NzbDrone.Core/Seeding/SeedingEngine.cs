@@ -68,6 +68,8 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
     private readonly HashSet<int> _stalledTorrentIds = new();
     private readonly HashSet<int> _extinctNotifiedTorrentIds = new();
     private readonly HashSet<int> _seedingTimeReachedTorrentIds = new();
+    private readonly Dictionary<int, double> _seedingTimeFraction = new();
+    private readonly Dictionary<int, double> _stallDurationFraction = new();
     private readonly IPieceStorage _pieceStorage;
     private readonly IDhtService _dhtService;
     private readonly ITrackerAnnounceService _trackerAnnounceService;
@@ -688,6 +690,8 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
             _stalledTorrentIds.Remove(id);
             _extinctNotifiedTorrentIds.Remove(id);
             _seedingTimeReachedTorrentIds.Remove(id);
+            _seedingTimeFraction.Remove(id);
+            _stallDurationFraction.Remove(id);
         }
 
         var totalActive = downloadingTorrents.Count + seedingTorrents.Count + stalledTorrents.Count;
@@ -751,15 +755,17 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
                 if (torrent.DownloadSpeed > 0)
                 {
                     torrent.StallDurationSeconds = 0;
+                    _stallDurationFraction.Remove(torrent.Id);
                     torrent.LastActiveTransferTime = _clock.UtcNow;
                 }
                 else if (torrent.Status == TorrentStatus.Downloading && !recoveredTorrents.Contains(torrent.Id))
                 {
-                    torrent.StallDurationSeconds += (int)Math.Max(1, actualDelta.TotalSeconds);
+                    torrent.StallDurationSeconds += (int)TakeWholeSeconds(_stallDurationFraction, torrent.Id, actualDelta.TotalSeconds);
                 }
                 else if (recoveredTorrents.Contains(torrent.Id))
                 {
                     torrent.StallDurationSeconds = 0;
+                    _stallDurationFraction.Remove(torrent.Id);
                 }
 
                 var stalledMinutes = torrent.StallDurationSeconds / 60;
@@ -874,6 +880,33 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
         return (long)Math.Round(newEma);
     }
 
+    private static long TakeWholeSeconds(Dictionary<int, double> fractions, int torrentId, double deltaSeconds)
+    {
+        if (deltaSeconds < 0)
+        {
+            deltaSeconds = 0;
+        }
+
+        var accumulated = deltaSeconds;
+        if (fractions.TryGetValue(torrentId, out var pending))
+        {
+            accumulated += pending;
+        }
+
+        var whole = (long)Math.Floor(accumulated);
+        var fraction = accumulated - whole;
+        if (fraction <= 0.0000001)
+        {
+            fractions.Remove(torrentId);
+        }
+        else
+        {
+            fractions[torrentId] = fraction;
+        }
+
+        return whole;
+    }
+
     private HashSet<int> UpdateComputedFields(List<Torrent> activeTorrents, int thresholdPercent, TimeSpan actualDelta)
     {
         var elapsedSeconds = Math.Max(0.001, actualDelta.TotalSeconds);
@@ -945,7 +978,7 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
             torrent.LastActive = _clock.UtcNow;
             if (torrent.Status == TorrentStatus.Seeding)
             {
-                torrent.SeedingTime += (long)Math.Max(1, actualDelta.TotalSeconds);
+                torrent.SeedingTime += TakeWholeSeconds(_seedingTimeFraction, torrent.Id, actualDelta.TotalSeconds);
             }
 
             if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed > 0 && torrent.TotalSize > 0)
