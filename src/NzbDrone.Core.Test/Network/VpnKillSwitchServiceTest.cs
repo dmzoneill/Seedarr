@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
@@ -77,6 +78,61 @@ public class VpnKillSwitchServiceTest
         Assert.That(vpnDroppedCalled, Is.True);
         Assert.That(droppedInterface, Is.EqualTo("tun0"));
         _eventAggregator.Received(1).PublishEvent(Arg.Is<VpnKillSwitchTriggeredEvent>(e => e.InterfaceName == "tun0"));
+    }
+
+    [Test]
+    public void CheckVpnState_does_not_hold_state_lock_while_vpn_dropped_runs()
+    {
+        _configService.EnableVpnKillSwitch.Returns(true);
+        _configService.BindInterface.Returns("tun0");
+        _service.InterfaceStatusCheck = _ => false;
+
+        var readerFinished = false;
+        var observedFailClosed = false;
+        _service.VpnDropped += _ =>
+        {
+            var reader = Task.Run(() =>
+            {
+                observedFailClosed = _service.IsFailClosedActive;
+            });
+            readerFinished = reader.Wait(TimeSpan.FromMilliseconds(250));
+        };
+
+        var triggered = _service.CheckVpnState();
+
+        Assert.That(triggered, Is.True);
+        Assert.That(readerFinished, Is.True);
+        Assert.That(observedFailClosed, Is.True);
+    }
+
+    [Test]
+    public void CheckVpnState_does_not_hold_state_lock_while_vpn_restored_runs()
+    {
+        _configService.EnableVpnKillSwitch.Returns(true);
+        _configService.BindInterface.Returns("wg0");
+        _service.InterfaceStatusCheck = _ => false;
+        _service.CheckVpnState();
+
+        _service.InterfaceStatusCheck = _ => true;
+        _service.CheckVpnState();
+        _currentTime = _currentTime.AddSeconds(8);
+
+        var readerFinished = false;
+        var stillFailClosed = true;
+        _service.VpnRestored += _ =>
+        {
+            var reader = Task.Run(() =>
+            {
+                stillFailClosed = _service.IsFailClosedActive;
+            });
+            readerFinished = reader.Wait(TimeSpan.FromMilliseconds(250));
+        };
+
+        var triggered = _service.CheckVpnState();
+
+        Assert.That(triggered, Is.False);
+        Assert.That(readerFinished, Is.True);
+        Assert.That(stillFailClosed, Is.False);
     }
 
     [Test]
