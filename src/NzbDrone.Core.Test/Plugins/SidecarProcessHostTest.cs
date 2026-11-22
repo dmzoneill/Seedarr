@@ -300,11 +300,27 @@ public class SidecarProcessHostTest
         await File.WriteAllTextAsync(script, "#!/bin/sh\nexit 0\n");
 
         using var host = new SidecarProcessHost(_manifest, _tempDir);
-        await host.StartAsync();
-        Assert.That(host.PluginInfo.ProcessId, Is.Not.Null);
+        host.PluginInfo.Enabled = false;
+        host.ProcessStarter = _ => Process.Start(new ProcessStartInfo
+        {
+            FileName = "sleep",
+            Arguments = "30",
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        });
 
         await host.StartAsync();
-        Assert.That(host.PluginInfo.State, Is.EqualTo(PluginState.Running).Or.EqualTo(PluginState.Stopped));
+        Assert.That(host.IsRunning, Is.True);
+
+        var process = (Process)typeof(SidecarProcessHost).GetField("_process", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(host);
+        process.Kill();
+        process.WaitForExit();
+
+        await host.StartAsync();
+        Assert.That(host.IsRunning, Is.True);
     }
 
     [Test]

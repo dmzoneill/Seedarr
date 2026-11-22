@@ -70,6 +70,7 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
 
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
+        Process startedProcess = null;
         lock (_stateLock)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
@@ -118,17 +119,6 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
 
                 _supervisor?.RegisterProcess(_process);
 
-                try
-                {
-                    DetachExitHandler(_process);
-                    _process.EnableRaisingEvents = true;
-                    _process.Exited += OnProcessExited;
-                }
-                catch (Exception ex)
-                {
-                    _logger.Trace(ex, "Could not attach Exited event to plugin process {0}", _manifest.Id);
-                }
-
                 _ioCts?.Cancel();
                 _ioCts?.Dispose();
                 _ioCts = new CancellationTokenSource();
@@ -136,8 +126,8 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
                 Task.Run(() => ReadStandardOutputAsync(_process.StandardOutput, ioToken), ioToken);
                 Task.Run(() => ReadStandardErrorAsync(_process.StandardError, ioToken), ioToken);
 
+                startedProcess = _process;
                 _logger.Info("Plugin '{0}' ({1}) started with PID {2}", _manifest.Name, _manifest.Id, _process.Id);
-                return Task.CompletedTask;
             }
             catch (Exception ex)
             {
@@ -147,6 +137,24 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
                 return Task.CompletedTask;
             }
         }
+
+        // Attach after releasing the lock. EnableRaisingEvents raises Exited on this
+        // thread when the process has already exited, and that handler takes the same lock.
+        if (startedProcess != null)
+        {
+            try
+            {
+                DetachExitHandler(startedProcess);
+                startedProcess.EnableRaisingEvents = true;
+                startedProcess.Exited += OnProcessExited;
+            }
+            catch (Exception ex)
+            {
+                _logger.Trace(ex, "Could not attach Exited event to plugin process {0}", _manifest.Id);
+            }
+        }
+
+        return Task.CompletedTask;
     }
 
     public async Task StopAsync(TimeSpan? timeout = null)
