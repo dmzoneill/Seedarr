@@ -30,6 +30,22 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
         }
 
         [Test]
+        public void Proxy_client_uses_the_same_timeout_as_the_default_client()
+        {
+            var proxy = Substitute.For<IProxySettingsProvider>();
+            proxy.IsEnabled.Returns(true);
+            proxy.Host.Returns("127.0.0.1");
+            proxy.Port.Returns(8080);
+            proxy.Type.Returns(ProxyType.Http);
+            proxy.CreateHandler().Returns(new SocketsHttpHandler());
+
+            var indexer = new NewznabIndexer(proxySettingsProvider: proxy);
+
+            Assert.That(indexer.Client.Timeout, Is.EqualTo(TimeSpan.FromSeconds(30)));
+            Assert.That(indexer.Client.Timeout, Is.LessThan(TimeSpan.FromSeconds(100)));
+        }
+
+        [Test]
         public void IndexerType_should_return_newznab()
         {
             Assert.That(_subject.IndexerType, Is.EqualTo("Newznab"));

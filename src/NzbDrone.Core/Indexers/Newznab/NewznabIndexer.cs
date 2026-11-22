@@ -143,7 +143,7 @@ public class NewznabIndexer : IIndexer
             {
                 _proxyHandler = _proxySettingsProvider.CreateHandler();
                 _proxyClient = _proxyHandler != null
-                    ? new HttpClient(_proxyHandler)
+                    ? new HttpClient(_proxyHandler) { Timeout = DefaultClient.Timeout }
                     : DefaultClient;
                 _lastProxyEnabled = true;
                 _lastProxyHost = host;
