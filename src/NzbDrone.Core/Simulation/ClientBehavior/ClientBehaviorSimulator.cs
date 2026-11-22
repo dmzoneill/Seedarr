@@ -464,18 +464,12 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
 
     private IClientProfile ResolveProfileByName(string clientName)
     {
-        var available = _profileFactory.GetAvailableProviders();
-
-        if (available == null || available.Count == 0)
-        {
-            _logger.Debug("No client profiles configured, using fallback profile: {0}", FallbackProfile.Name);
-            return FallbackProfile;
-        }
+        var available = GetSelectableProfiles();
 
         if (!string.IsNullOrWhiteSpace(clientName))
         {
             var match = available.FirstOrDefault(p =>
-                p.Name.StartsWith(clientName, StringComparison.OrdinalIgnoreCase));
+                p != null && p.Name != null && p.Name.StartsWith(clientName, StringComparison.OrdinalIgnoreCase));
 
             if (match != null)
             {
@@ -483,13 +477,35 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator,
             }
         }
 
-        _logger.Warn("No client profile matching '{0}', using first available: {1}", clientName, available[0].Name);
-        return available[0] ?? FallbackProfile;
+        var fallback = available.FirstOrDefault(p => p != null) ?? FallbackProfile;
+        _logger.Warn("No client profile matching '{0}', using first available: {1}", clientName, fallback.Name);
+        return fallback;
+    }
+
+    private IReadOnlyList<IClientProfile> GetSelectableProfiles()
+    {
+        IReadOnlyList<IClientProfile> available = null;
+        try
+        {
+            available = _profileFactory?.GetAvailableProviders();
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to load configured client profiles");
+        }
+
+        if (available == null || available.Count == 0)
+        {
+            _logger.Debug("No client profiles configured, using built-in profiles");
+            return BuiltInClientProfiles.All;
+        }
+
+        return available;
     }
 
     private IClientProfile SelectRandomAlternateProfile(IClientProfile current)
     {
-        var available = _profileFactory.GetAvailableProviders();
+        var available = GetSelectableProfiles();
 
         if (available.Count <= 1)
         {

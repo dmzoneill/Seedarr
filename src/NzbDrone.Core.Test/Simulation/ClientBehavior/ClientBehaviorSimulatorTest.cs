@@ -131,6 +131,71 @@ public class ClientBehaviorSimulatorTest
     }
 
     [Test]
+    public void GetActiveProfile_uses_built_ins_when_the_profile_factory_throws()
+    {
+        _profileFactory.GetAvailableProviders().Returns(_ => throw new InvalidOperationException("definitions unavailable"));
+        _configService.PrimaryClient.Returns("uTorrent");
+
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory, clock: _clock);
+
+        var profile = _simulator.GetActiveProfile();
+
+        Assert.That(profile.Name, Does.Contain("uTorrent"));
+        Assert.That(profile.PeerIdPrefix, Is.EqualTo("-UT3550-"));
+    }
+
+    [Test]
+    public void GetActiveProfile_skips_a_null_profile_and_falls_back_when_nothing_matches()
+    {
+        var nameless = Substitute.For<IClientProfile>();
+        nameless.Name.Returns((string)null);
+        _profileFactory.GetAvailableProviders().Returns(new List<IClientProfile> { null, nameless, _delugeProfile });
+        _configService.PrimaryClient.Returns("Deluge");
+
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory, clock: _clock);
+        Assert.That(_simulator.GetActiveProfile().Name, Does.Contain("Deluge"));
+
+        _profileFactory.GetAvailableProviders().Returns(new List<IClientProfile> { null });
+        _configService.PrimaryClient.Returns("Nope");
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory, clock: _clock);
+
+        Assert.That(_simulator.GetActiveProfile().Name, Does.Contain("qBittorrent"));
+    }
+
+    [Test]
+    public void GetActiveProfile_uses_selected_primary_client_when_no_profiles_are_configured()
+    {
+        _profileFactory.GetAvailableProviders().Returns(new List<IClientProfile>());
+        _configService.PrimaryClient.Returns("Transmission");
+        _configService.ClientBehaviorEngineEnabled.Returns(true);
+
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory, clock: _clock);
+
+        var profile = _simulator.GetActiveProfile();
+
+        Assert.That(profile.Name, Does.Contain("Transmission"));
+        Assert.That(profile.PeerIdPrefix, Is.EqualTo("-TR3000-"));
+        Assert.That(profile.UserAgent, Does.Contain("Transmission"));
+    }
+
+    [Test]
+    public void GetActiveProfile_can_switch_among_built_in_profiles_when_none_are_configured()
+    {
+        _profileFactory.GetAvailableProviders().Returns(new List<IClientProfile>());
+        _configService.PrimaryClient.Returns("qBittorrent");
+        _configService.ClientBehaviorEngineEnabled.Returns(true);
+        _configService.ClientProfileSwitching.Returns(true);
+        _configService.SwitchClientProbability.Returns(1.0);
+
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory, clock: _clock);
+        var first = _simulator.GetActiveProfile();
+        AdvanceClock(ClientBehaviorSimulator.DefaultSwitchCooldown.Add(TimeSpan.FromSeconds(1)));
+        var second = _simulator.GetActiveProfile();
+
+        Assert.That(second.Name, Is.Not.EqualTo(first.Name));
+    }
+
+    [Test]
     public void GetActiveProfile_should_cache_profile_between_calls()
     {
         var profile1 = _simulator.GetActiveProfile();
