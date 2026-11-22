@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -40,9 +41,25 @@ public class DbFactoryTest
 
         var dir = Path.GetDirectoryName(_tempDbPath);
         var fileName = Path.GetFileName(_tempDbPath);
+        foreach (var suffix in new[] { string.Empty, "-wal", "-shm", "-journal" })
+        {
+            var sidecar = _tempDbPath + suffix;
+            if (File.Exists(sidecar))
+            {
+                try
+                {
+                    File.Delete(sidecar);
+                }
+                catch
+                {
+                    // best-effort cleanup
+                }
+            }
+        }
+
         if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
         {
-            foreach (var bak in Directory.GetFiles(dir, $"{fileName}.pre-migration-*.bak"))
+            foreach (var bak in Directory.GetFiles(dir, $"{fileName}.pre-migration-*.bak*"))
             {
                 try
                 {
@@ -346,14 +363,14 @@ public class DbFactoryTest
     }
 
     [Test]
-    public void CreatePreMigrationSnapshot_skips_snapshot_when_wal_checkpoint_is_busy()
+    public void CreatePreMigrationSnapshot_includes_only_committed_rows_while_a_write_transaction_is_open()
     {
         var connectionString = $"Data Source={_tempDbPath}";
         using (var setup = new SqliteConnection(connectionString))
         {
             setup.Open();
             using var cmd = setup.CreateCommand();
-            cmd.CommandText = "PRAGMA journal_mode=WAL; CREATE TABLE WalBusyTest (Id INTEGER PRIMARY KEY);";
+            cmd.CommandText = "PRAGMA journal_mode=WAL; CREATE TABLE WalBusyTest (Id INTEGER PRIMARY KEY, Val TEXT); INSERT INTO WalBusyTest VALUES (1, 'committed');";
             cmd.ExecuteNonQuery();
         }
 
@@ -363,19 +380,92 @@ public class DbFactoryTest
         using (var insert = blockingConn.CreateCommand())
         {
             insert.Transaction = tx;
-            insert.CommandText = "INSERT INTO WalBusyTest VALUES (1);";
+            insert.CommandText = "INSERT INTO WalBusyTest VALUES (2, 'uncommitted');";
             insert.ExecuteNonQuery();
         }
 
         var factory = new DbFactory();
         var snapshotPath = factory.CreatePreMigrationSnapshot(connectionString);
 
-        Assert.That(snapshotPath, Is.Null);
+        Assert.That(snapshotPath, Is.Not.Null, "Online backup must proceed while another connection holds an open write transaction.");
+        Assert.That(File.Exists(snapshotPath), Is.True);
 
-        var dir = Path.GetDirectoryName(_tempDbPath);
-        var fileName = Path.GetFileName(_tempDbPath);
-        var snapshots = Directory.GetFiles(dir, $"{fileName}.pre-migration-*.bak");
-        Assert.That(snapshots, Is.Empty);
+        using var backupConn = new SqliteConnection($"Data Source={snapshotPath};Pooling=False");
+        backupConn.Open();
+        using var read = backupConn.CreateCommand();
+        read.CommandText = "SELECT Val FROM WalBusyTest ORDER BY Id;";
+        using var reader = read.ExecuteReader();
+        Assert.That(reader.Read(), Is.True);
+        Assert.That(reader.GetString(0), Is.EqualTo("committed"));
+        Assert.That(reader.Read(), Is.False, "Uncommitted rows must not be included in the snapshot.");
+    }
+
+    [Test]
+    public void CreatePreMigrationSnapshot_does_not_drop_locks_held_by_open_connections()
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+        {
+            Assert.Ignore("Reproduces POSIX fcntl lock loss, which unlinks a live SQLite WAL.");
+        }
+
+        var connectionString = $"Data Source={_tempDbPath}";
+        using var keepAlive = new SqliteConnection(connectionString);
+        keepAlive.Open();
+        using (var cmd = keepAlive.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA journal_mode=WAL; CREATE TABLE LockProbe (Id INTEGER PRIMARY KEY, Val TEXT); INSERT INTO LockProbe VALUES (1, 'committed');";
+            cmd.ExecuteNonQuery();
+        }
+
+        var factory = new DbFactory();
+        var snapshotPath = factory.CreatePreMigrationSnapshot(connectionString);
+
+        Assert.That(snapshotPath, Is.Not.Null);
+        Assert.That(File.Exists(snapshotPath), Is.True);
+        Assert.That(File.Exists(snapshotPath + "-wal"), Is.False, "The pre-migration snapshot must be a single self-contained database file.");
+
+        using (var snap = new SqliteConnection($"Data Source={snapshotPath};Pooling=False"))
+        {
+            snap.Open();
+            using var cmd = snap.CreateCommand();
+            cmd.CommandText = "SELECT Val FROM LockProbe WHERE Id = 1;";
+            Assert.That(cmd.ExecuteScalar()?.ToString(), Is.EqualTo("committed"));
+        }
+
+        // A real read (not "SELECT 1") makes the other process open the WAL. If this
+        // process has lost its advisory locks, that process unlinks the WAL on close.
+        OpenAndCloseSqliteInChildProcess(_tempDbPath);
+
+        using (var cmd = keepAlive.CreateCommand())
+        {
+            cmd.CommandText = "INSERT INTO LockProbe VALUES (2, 'after-snapshot');";
+            cmd.ExecuteNonQuery();
+        }
+
+        SqliteException ioError = null;
+        string observed = null;
+        try
+        {
+            using var fresh = new SqliteConnection($"Data Source={_tempDbPath};Pooling=False");
+            fresh.Open();
+            using var cmd = fresh.CreateCommand();
+            cmd.CommandText = "SELECT Val FROM LockProbe WHERE Id = 2;";
+            observed = cmd.ExecuteScalar()?.ToString();
+        }
+        catch (SqliteException ex)
+        {
+            ioError = ex;
+        }
+
+        Assert.That(
+            ioError,
+            Is.Null,
+            "A new connection must not hit disk I/O error after another process opens and closes the database. " +
+            "That SQLITE_IOERR means the snapshot dropped POSIX locks and the other process unlinked the WAL. " +
+            (ioError == null ? string.Empty : ioError.Message));
+        Assert.That(observed, Is.EqualTo("after-snapshot"));
+        Assert.That(File.Exists(_tempDbPath + "-wal"), Is.True, "WAL must stay linked while this process has the database open.");
+        Assert.That(File.Exists(_tempDbPath + "-shm"), Is.True, "SHM must stay linked while this process has the database open.");
     }
 
     [Test]
@@ -495,6 +585,83 @@ public class DbFactoryTest
 
         var logs = memoryTarget.Logs;
         Assert.That(logs.Any(log => log.Contains(snapshots[0])), Is.True, "Log output must reference the pre-migration snapshot path");
+    }
+
+    private static void OpenAndCloseSqliteInChildProcess(string dbPath)
+    {
+        var python = FindExecutable("python3") ?? FindExecutable("python");
+        ProcessStartInfo startInfo;
+        if (python != null)
+        {
+            startInfo = new ProcessStartInfo
+            {
+                FileName = python,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add("-c");
+            startInfo.ArgumentList.Add("import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute('select count(*) from sqlite_master'); c.close()");
+            startInfo.ArgumentList.Add(dbPath);
+        }
+        else
+        {
+            var sqlite = FindExecutable("sqlite3");
+            if (sqlite == null)
+            {
+                Assert.Ignore("python3 or sqlite3 is required to open the database from another process.");
+            }
+
+            startInfo = new ProcessStartInfo
+            {
+                FileName = sqlite,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add(dbPath);
+            startInfo.ArgumentList.Add("SELECT count(*) FROM sqlite_master;");
+        }
+
+        using var process = Process.Start(startInfo);
+        Assert.That(process, Is.Not.Null, "Failed to start the external SQLite process.");
+        var exited = process.WaitForExit(15000);
+        if (!exited)
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (Exception)
+            {
+                // The assertion below reports the timeout.
+            }
+
+            Assert.Fail("External SQLite process did not exit.");
+        }
+
+        var stderr = process.StandardError.ReadToEnd();
+        Assert.That(process.ExitCode, Is.EqualTo(0), "External SQLite process failed: " + stderr);
+    }
+
+    private static string FindExecutable(string name)
+    {
+        var pathEnv = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrEmpty(pathEnv))
+        {
+            return null;
+        }
+
+        foreach (var dir in pathEnv.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = Path.Combine(dir, name);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private class FakeDbParameter : IDbDataParameter

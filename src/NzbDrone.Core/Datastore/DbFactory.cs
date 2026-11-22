@@ -218,18 +218,11 @@ public class DbFactory : IDbFactory
             return null;
         }
 
-        if (!FlushSqliteWal(connectionString))
-        {
-            _logger.Warn(
-                "Skipping pre-migration database snapshot for {0} because SQLite WAL could not be checkpointed",
-                dbPath);
-            return null;
-        }
-
+        string snapshotPath = null;
         try
         {
             var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
-            var snapshotPath = $"{dbPath}.pre-migration-{timestamp}.bak";
+            snapshotPath = $"{dbPath}.pre-migration-{timestamp}.bak";
             if (File.Exists(snapshotPath))
             {
                 var counter = 1;
@@ -241,7 +234,12 @@ public class DbFactory : IDbFactory
                 snapshotPath = $"{dbPath}.pre-migration-{timestamp}_{counter}.bak";
             }
 
-            File.Copy(dbPath, snapshotPath, overwrite: true);
+            // Pages are copied through the connection. Opening the live file with
+            // File.Copy and then closing that descriptor drops every POSIX advisory
+            // lock this process holds on the inode (SQLite howtocorrupt §2.2). The
+            // next external connection then unlinks the WAL and SHM, and pooled
+            // handles are left on deleted inodes until restart (SQLITE_IOERR).
+            BackupSqliteDatabase(connectionString, snapshotPath);
             _logger.Info("Created pre-migration database snapshot at {0}", snapshotPath);
 
             PrunePreMigrationSnapshots(dbPath, 3, _logger);
@@ -251,6 +249,11 @@ public class DbFactory : IDbFactory
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to create pre-migration database snapshot for {0}", dbPath);
+            if (!string.IsNullOrEmpty(snapshotPath))
+            {
+                DeleteSnapshotArtifacts(snapshotPath);
+            }
+
             return null;
         }
     }
@@ -299,33 +302,51 @@ public class DbFactory : IDbFactory
         }
     }
 
-    private bool FlushSqliteWal(string connectionString)
+    private static void BackupSqliteDatabase(string connectionString, string snapshotPath)
     {
-        try
+        using var source = new SqliteConnection(connectionString);
+        source.Open();
+        using (var pragma = source.CreateCommand())
         {
-            using var conn = new SqliteConnection(connectionString);
-            conn.Open();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
-            using var reader = cmd.ExecuteReader();
-            if (reader.Read())
+            pragma.CommandText = "PRAGMA busy_timeout = 30000;";
+            pragma.ExecuteNonQuery();
+        }
+
+        var destinationConnectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = snapshotPath,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Pooling = false
+        }.ToString();
+
+        using var destination = new SqliteConnection(destinationConnectionString);
+        destination.Open();
+        source.BackupDatabase(destination);
+
+        // The backup copies the source header, which may mark the snapshot as WAL.
+        // Checkpoint before close so the .bak file is self-contained and a restore
+        // does not depend on a sidecar that this process is about to drop.
+        using var checkpoint = destination.CreateCommand();
+        checkpoint.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+        checkpoint.ExecuteNonQuery();
+    }
+
+    private void DeleteSnapshotArtifacts(string snapshotPath)
+    {
+        foreach (var suffix in new[] { string.Empty, "-wal", "-shm", "-journal" })
+        {
+            var path = snapshotPath + suffix;
+            try
             {
-                var busy = reader.GetInt32(0);
-                if (busy != 0)
+                if (File.Exists(path))
                 {
-                    _logger.Warn(
-                        "SQLite WAL checkpoint did not complete before pre-migration snapshot (busy={0})",
-                        busy);
-                    return false;
+                    File.Delete(path);
                 }
             }
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.Warn(ex, "Failed to flush SQLite WAL before pre-migration snapshot");
-            return false;
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to delete partial pre-migration snapshot file {0}", path);
+            }
         }
     }
 
