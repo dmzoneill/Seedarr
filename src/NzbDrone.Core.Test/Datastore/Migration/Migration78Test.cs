@@ -197,7 +197,7 @@ public class Migration78Test
                 SELECT column_name AS Name, data_type AS DataType, is_nullable AS IsNullable
                 FROM information_schema.columns
                 WHERE table_name = 'NotificationDefinitions'
-                  AND column_name = 'FallbackNotificationId'
+                    AND column_name = 'FallbackNotificationId'
                 """);
 
             Assert.That(column, Is.Not.Null);
