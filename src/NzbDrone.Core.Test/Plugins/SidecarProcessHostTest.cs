@@ -260,4 +260,36 @@ public class SidecarProcessHostTest
         host.Dispose();
         Assert.Throws<ObjectDisposedException>(() => host.StartAsync());
     }
+
+    [Test]
+    public void OnProcessExited_after_dispose_does_not_record_a_crash_or_restart()
+    {
+        using var host = new SidecarProcessHost(_manifest, _tempDir);
+        host.PluginInfo.Enabled = true;
+
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var processField = typeof(SidecarProcessHost).GetField("_process", flags);
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = "sleep",
+            Arguments = "30",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        });
+        Assert.That(process, Is.Not.Null);
+        processField.SetValue(host, process);
+        host.PluginInfo.State = PluginState.Running;
+
+        host.Dispose();
+
+        var handler = typeof(SidecarProcessHost).GetMethod("OnProcessExited", flags);
+        handler.Invoke(host, new object[] { process, EventArgs.Empty });
+
+        Assert.That(host.PluginInfo.CrashCount, Is.EqualTo(0));
+        Assert.That(host.PluginInfo.State, Is.EqualTo(PluginState.Stopped));
+        Assert.That(host.IsRunning, Is.False);
+    }
 }

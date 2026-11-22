@@ -30,6 +30,7 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
     private CancellationTokenSource _restartCts;
     private long _requestIdCounter;
     private bool _isStopping;
+    private bool _intentionalStop;
     private bool _disposed;
 
     public SidecarProcessHost(
@@ -72,6 +73,7 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
         lock (_stateLock)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            _intentionalStop = false;
 
             if (IsRunning)
             {
@@ -99,6 +101,7 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
 
                 if (_process != null)
                 {
+                    DetachExitHandler(_process);
                     Dispose(true);
                 }
 
@@ -117,6 +120,7 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
 
                 try
                 {
+                    DetachExitHandler(_process);
                     _process.EnableRaisingEvents = true;
                     _process.Exited += OnProcessExited;
                 }
@@ -152,8 +156,10 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
 
         lock (_stateLock)
         {
+            _intentionalStop = true;
             _isStopping = true;
             _restartCts?.Cancel();
+            DetachExitHandler(_process);
 
             processToStop = _process;
             writerToClose = _stdinWriter;
@@ -250,8 +256,10 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
     {
         lock (_stateLock)
         {
+            _intentionalStop = true;
             _isStopping = true;
             _restartCts?.Cancel();
+            DetachExitHandler(_process);
 
             if (_process != null)
             {
@@ -375,6 +383,7 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
         }
 
         _disposed = true;
+        _intentionalStop = true;
         _restartCts?.Cancel();
         _restartCts?.Dispose();
         _ioCts?.Cancel();
@@ -489,16 +498,55 @@ public class SidecarProcessHost : ISidecarProcessHost, IDisposable
         return CustomScriptService.ResolveInterpreter(entrypointPath, string.Empty);
     }
 
+    private void DetachExitHandler(Process process)
+    {
+        if (process == null)
+        {
+            return;
+        }
+
+        try
+        {
+            process.Exited -= OnProcessExited;
+        }
+        catch (Exception)
+        {
+            // Process may already be disposed.
+        }
+    }
+
     private void OnProcessExited(object sender, EventArgs e)
     {
         lock (_stateLock)
         {
-            Dispose(true);
-
-            if (_isStopping)
+            var process = sender as Process;
+            if (process != null)
             {
-                PluginInfo.State = PluginState.Stopped;
+                try
+                {
+                    process.Exited -= OnProcessExited;
+                }
+                catch (Exception)
+                {
+                    // Process may already be disposed.
+                }
+            }
+
+            var intentional = _disposed || _intentionalStop || _isStopping || !ReferenceEquals(process, _process);
+            if (ReferenceEquals(process, _process))
+            {
+                Dispose(true);
                 PluginInfo.ProcessId = null;
+            }
+
+            if (intentional)
+            {
+                if (ReferenceEquals(process, _process) || _process == null)
+                {
+                    PluginInfo.State = PluginState.Stopped;
+                    PluginInfo.ProcessId = null;
+                }
+
                 return;
             }
 
