@@ -4113,6 +4113,14 @@ public class PeerServerTest
 
         await serverTask;
 
+        // The accept loop returns once both replies are written. The client releases
+        // its half-open permit only after it finishes reading that reply, so the
+        // count can still be zero for a moment after serverTask completes.
+        for (var i = 0; i < 120 && halfOpen.CurrentCount < 1; i++)
+        {
+            await Task.Delay(25);
+        }
+
         // Both connections established successfully despite MaximumHalfOpenConnections = 1
         Assert.That(halfOpen.CurrentCount, Is.EqualTo(1));
         Assert.That(connectTask1.IsCompleted, Is.False);
