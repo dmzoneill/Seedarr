@@ -34,8 +34,17 @@ function Activity() {
     isLoading: torrentsLoading,
     isError: torrentsError,
   } = useTorrents();
-  const { data: stats } = useSeedingStats();
-  const { data: serverHistory, refetch: refetchHistory } = useSpeedHistory();
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    isError: statsError,
+  } = useSeedingStats();
+  const {
+    data: serverHistory,
+    isLoading: historyLoading,
+    isError: historyError,
+    refetch: refetchHistory,
+  } = useSpeedHistory();
 
   const [history, setHistory] = useState<HistoryState>({
     uploadSpeed: [],
@@ -211,6 +220,10 @@ function Activity() {
   const currentRatio = stats?.averageRatio ?? 0;
   const currentNetwork = currentUpload + currentDownload;
   const peersUnavailable = Boolean(torrentsError && !torrents);
+  const statsUnavailable = Boolean(statsError && !stats);
+  const speedsUnavailable =
+    history.uploadSpeed.length === 0 &&
+    ((historyError && !serverHistory) || statsUnavailable);
 
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
@@ -269,25 +282,35 @@ function Activity() {
           Failed to load torrents.
         </p>
       )}
+      {!statsLoading && statsError && (
+        <p className="error" role="alert">
+          Failed to load seeding stats.
+        </p>
+      )}
+      {!historyLoading && historyError && (
+        <p className="error" role="alert">
+          Failed to load speed history.
+        </p>
+      )}
 
       <div className="monitoring-grid">
         <LineChart
           title="Upload Speed"
-          value={formatSpeed(currentUpload)}
+          value={speedsUnavailable ? "—" : formatSpeed(currentUpload)}
           data={history.uploadSpeed}
           color="#c8a84e"
           maxPoints={MAX_POINTS}
         />
         <LineChart
           title="Download Speed"
-          value={formatSpeed(currentDownload)}
+          value={speedsUnavailable ? "—" : formatSpeed(currentDownload)}
           data={history.downloadSpeed}
           color="#b5443a"
           maxPoints={MAX_POINTS}
         />
         <LineChart
           title="Active Torrents"
-          value={String(currentActive)}
+          value={statsUnavailable ? "—" : String(currentActive)}
           data={history.activeTorrents}
           color="#27ae60"
           maxPoints={MAX_POINTS}
@@ -301,14 +324,14 @@ function Activity() {
         />
         <LineChart
           title="Upload/Download Ratio"
-          value={formatRatio(currentRatio)}
+          value={statsUnavailable ? "—" : formatRatio(currentRatio)}
           data={history.ratio}
           color="#c8a84e"
           maxPoints={MAX_POINTS}
         />
         <LineChart
           title="Network Activity"
-          value={formatSpeed(currentNetwork)}
+          value={speedsUnavailable ? "—" : formatSpeed(currentNetwork)}
           data={history.networkActivity}
           color="#9b59b6"
           maxPoints={MAX_POINTS}

@@ -51,4 +51,28 @@ void describe("Activity torrent load errors", () => {
       "Peer count must not render as a successful zero when torrents failed to load",
     );
   });
+
+  void it("shows seeding stats and speed history failures instead of zero charts", () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, retryOnMount: false },
+      },
+    });
+    queryClient.setQueryData(["torrents"], []);
+    seedQueryError(queryClient, ["seeding", "stats"], "stats failed");
+    seedQueryError(queryClient, ["seeding", "history"], "history failed");
+
+    const html = renderToStaticMarkup(
+      React.createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        React.createElement(Activity),
+      ),
+    );
+
+    assert.ok(html.includes("Failed to load seeding stats."));
+    assert.ok(html.includes("Failed to load speed history."));
+    assert.equal(html.includes("Failed to load torrents."), false);
+    assert.ok(html.includes(">—<"));
+  });
 });
