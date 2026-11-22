@@ -1,6 +1,16 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { Torrent } from "../../api/types";
-import { useTorrentFiles, useRenameTorrentFile } from "../../api/hooks";
+import {
+  useTorrentFiles,
+  useRenameTorrentFile,
+  useSetFilePriority,
+  useSetFilesPriority,
+} from "../../api/hooks";
+import { useToast } from "../../context/ToastContext";
+import {
+  createFilePriorityHandlers,
+  type FilePriorityState,
+} from "./filePriorityPersistence";
 import { formatBytes } from "../../utils/formatters";
 import { SkeletonLine } from "../../components/Skeleton";
 import { MediaPlayerModal } from "../../components/MediaPlayerModal";
@@ -9,7 +19,6 @@ import {
   FileTreeNode,
   FilePriority,
   buildFileTree,
-  getDescendantFileIds,
   getDirectoryPriority,
   getDirectoryWanted,
   formatPriority,
@@ -429,11 +438,23 @@ function FileTreeRow({
 export function FilesTab({ torrent }: { torrent: Torrent }) {
   const { data: files, isLoading, error } = useTorrentFiles(torrent.id);
   const renameFile = useRenameTorrentFile();
+  const { mutate: persistFilePriority } = useSetFilePriority();
+  const { mutate: persistFilesPriority } = useSetFilesPriority();
+  const { showToast } = useToast();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [filePriorities, setFilePriorities] = useState<
     Record<number, FilePriority>
   >({});
   const [fileWanted, setFileWanted] = useState<Record<number, boolean>>({});
+  const [priorityError, setPriorityError] = useState<string | null>(null);
+  const priorityStateRef = useRef<FilePriorityState>({
+    priorities: {},
+    wanted: {},
+  });
+  priorityStateRef.current = {
+    priorities: filePriorities,
+    wanted: fileWanted,
+  };
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState<string>("");
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -504,74 +525,35 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
     });
   }, []);
 
-  const handleDirectoryPriority = useCallback(
-    (dirNode: FileTreeNode, priority: FilePriority) => {
-      const ids = getDescendantFileIds(dirNode);
-      setFilePriorities((prev) => {
-        const next = { ...prev };
-        for (const id of ids) {
-          next[id] = priority;
-        }
-        return next;
-      });
-      setFileWanted((prev) => {
-        const next = { ...prev };
-        const isWanted =
-          priority !== "Do Not Download" && priority !== "Skip All";
-        for (const id of ids) {
-          next[id] = isWanted;
-        }
-        return next;
-      });
-    },
-    [],
+  const {
+    handleDirectoryPriority,
+    handleFilePriority,
+    handleDirectoryWanted,
+    handleFileWanted,
+  } = useMemo(
+    () =>
+      createFilePriorityHandlers({
+        torrentId: torrent.id,
+        getState: () => priorityStateRef.current,
+        setState: (next) => {
+          priorityStateRef.current = next;
+          setFilePriorities(next.priorities);
+          setFileWanted(next.wanted);
+          setPriorityError(null);
+        },
+        setFilePriority: (request, options) => {
+          persistFilePriority(request, options);
+        },
+        setFilesPriority: (request, options) => {
+          persistFilesPriority(request, options);
+        },
+        onError: (message) => {
+          setPriorityError(message);
+          showToast(message, "error");
+        },
+      }),
+    [persistFilePriority, persistFilesPriority, showToast, torrent.id],
   );
-
-  const handleFilePriority = useCallback(
-    (fileId: number, priority: FilePriority) => {
-      setFilePriorities((prev) => ({
-        ...prev,
-        [fileId]: priority,
-      }));
-      setFileWanted((prev) => ({
-        ...prev,
-        [fileId]: formatPriority(priority) !== "Do Not Download",
-      }));
-    },
-    [],
-  );
-
-  const handleDirectoryWanted = useCallback(
-    (dirNode: FileTreeNode, wanted: boolean) => {
-      const ids = getDescendantFileIds(dirNode);
-      setFileWanted((prev) => {
-        const next = { ...prev };
-        for (const id of ids) {
-          next[id] = wanted;
-        }
-        return next;
-      });
-      setFilePriorities((prev) => {
-        const next = { ...prev };
-        for (const id of ids) {
-          next[id] = wanted ? "Normal" : "Do Not Download";
-        }
-        return next;
-      });
-    },
-    [],
-  );
-
-  const handleFileWanted = useCallback((fileId: number, wanted: boolean) => {
-    setFileWanted((prev) => ({
-      ...prev,
-      [fileId]: wanted,
-    }));
-    setFilePriorities((prev) => ({
-      ...prev,
-      [fileId]: wanted ? "Normal" : "Do Not Download",
-    }));
-  }, []);
 
   const nonPaddingFiles = useMemo(
     () => files?.filter((f) => !f.isPaddingFile) ?? [],
@@ -715,6 +697,11 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
       {renameError && (
         <p className="error" style={{ marginTop: "0.5rem" }}>
           {renameError}
+        </p>
+      )}
+      {priorityError && (
+        <p className="error" style={{ marginTop: "0.5rem" }}>
+          {priorityError}
         </p>
       )}
       {selectedMediaFile && (
