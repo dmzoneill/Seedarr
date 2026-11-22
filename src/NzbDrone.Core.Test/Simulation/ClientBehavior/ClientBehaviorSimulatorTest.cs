@@ -322,6 +322,33 @@ public class ClientBehaviorSimulatorTest
     }
 
     [Test]
+    public void GetActiveProfile_for_private_torrent_does_not_pin_global_profile_or_reset_cooldown()
+    {
+        _configService.ClientBehaviorEngineEnabled.Returns(true);
+        _configService.PrimaryClient.Returns("qBittorrent");
+        _configService.ClientProfileSwitching.Returns(true);
+        _configService.SwitchClientProbability.Returns(1.0);
+
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory, clock: _clock);
+
+        var initial = _simulator.GetActiveProfile(isPrivateTorrent: false);
+        AdvanceClock(ClientBehaviorSimulator.DefaultSwitchCooldown.Add(TimeSpan.FromSeconds(1)));
+        var rotated = _simulator.GetActiveProfile(isPrivateTorrent: false);
+        var rotatedAt = _simulator.LastProfileSwitchTime;
+
+        Assert.That(rotated.Name, Is.Not.EqualTo(initial.Name));
+
+        AdvanceClock(TimeSpan.FromMinutes(1));
+        var privateProfile = _simulator.GetActiveProfile(isPrivateTorrent: true);
+
+        Assert.That(privateProfile.Name, Is.EqualTo("qBittorrent 4.4.2"));
+        Assert.That(_simulator.LastProfileSwitchTime, Is.EqualTo(rotatedAt), "A private lookup must not reset the public switch cooldown");
+
+        var publicSession = _simulator.GetOrCreateSession("0123456789abcdef0123456789abcdef01234567", isPrivateTorrent: false);
+        Assert.That(publicSession.ProfileName, Is.EqualTo(rotated.Name), "Public sessions must keep the rotated profile after a private lookup");
+    }
+
+    [Test]
     public void GetActiveProfile_should_allow_switching_when_isPrivateTorrent_is_false()
     {
         _configService.ClientBehaviorEngineEnabled.Returns(true);
