@@ -29,7 +29,7 @@ void describe("TorrentGrid load errors", () => {
       data: undefined,
     });
 
-    const html = renderToStaticMarkup(
+    const markup = renderToStaticMarkup(
       React.createElement(
         QueryClientProvider,
         { client: queryClient },
@@ -37,8 +37,8 @@ void describe("TorrentGrid load errors", () => {
       ),
     );
 
-    assert.ok(html.includes("Failed to load data."));
-    assert.equal(html.includes("No torrents found"), false);
+    assert.ok(markup.includes("Failed to load data."));
+    assert.equal(markup.includes("No torrents found"), false);
   });
 });
 
@@ -104,7 +104,7 @@ void describe("TorrentGrid virtualization", () => {
     });
     queryClient.setQueryData(["torrents"], torrents);
 
-    const html = renderToStaticMarkup(
+    const markup = renderToStaticMarkup(
       React.createElement(
         QueryClientProvider,
         { client: queryClient },
@@ -112,9 +112,9 @@ void describe("TorrentGrid virtualization", () => {
       ),
     );
 
-    const rendered = html.match(/aria-label="Select /g) ?? [];
-    assert.ok(html.includes('aria-label="Select Visible First"'));
-    assert.equal(html.includes('aria-label="Select Hidden Last"'), false);
+    const rendered = markup.match(/aria-label="Select /g) ?? [];
+    assert.ok(markup.includes('aria-label="Select Visible First"'));
+    assert.equal(markup.includes('aria-label="Select Hidden Last"'), false);
     assert.ok(rendered.length > 0);
     assert.ok(rendered.length < torrents.length);
   });

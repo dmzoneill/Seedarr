@@ -33,7 +33,7 @@ void describe("Activity torrent load errors", () => {
     });
     seedQueryError(queryClient, ["torrents"], "GET /torrent failed");
 
-    const html = renderToStaticMarkup(
+    const markup = renderToStaticMarkup(
       React.createElement(
         QueryClientProvider,
         { client: queryClient },
@@ -42,12 +42,12 @@ void describe("Activity torrent load errors", () => {
     );
 
     assert.ok(
-      html.includes("Failed to load torrents."),
+      markup.includes("Failed to load torrents."),
       "Activity must surface useTorrents isError",
     );
-    assert.ok(html.includes('role="alert"'));
+    assert.ok(markup.includes('role="alert"'));
     assert.ok(
-      html.includes(">—<"),
+      markup.includes(">—<"),
       "Peer count must not render as a successful zero when torrents failed to load",
     );
   });
@@ -62,7 +62,7 @@ void describe("Activity torrent load errors", () => {
     seedQueryError(queryClient, ["seeding", "stats"], "stats failed");
     seedQueryError(queryClient, ["seeding", "history"], "history failed");
 
-    const html = renderToStaticMarkup(
+    const markup = renderToStaticMarkup(
       React.createElement(
         QueryClientProvider,
         { client: queryClient },
@@ -70,9 +70,9 @@ void describe("Activity torrent load errors", () => {
       ),
     );
 
-    assert.ok(html.includes("Failed to load seeding stats."));
-    assert.ok(html.includes("Failed to load speed history."));
-    assert.equal(html.includes("Failed to load torrents."), false);
-    assert.ok(html.includes(">—<"));
+    assert.ok(markup.includes("Failed to load seeding stats."));
+    assert.ok(markup.includes("Failed to load speed history."));
+    assert.equal(markup.includes("Failed to load torrents."), false);
+    assert.ok(markup.includes(">—<"));
   });
 });

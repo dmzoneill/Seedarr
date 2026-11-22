@@ -48,12 +48,12 @@ void describe("MatrixView load errors", () => {
     seedQueryError(client, ["trackerboost", "matrix"], "matrix failed");
     client.setQueryData(["torrents"], []);
 
-    const html = renderMatrix(client);
+    const markup = renderMatrix(client);
 
-    assert.ok(html.includes("Failed to load data."));
-    assert.equal(html.includes("No torrents match the search query."), false);
+    assert.ok(markup.includes("Failed to load data."));
+    assert.equal(markup.includes("No torrents match the search query."), false);
     assert.equal(
-      html.includes("No tracker endpoints match the search query."),
+      markup.includes("No tracker endpoints match the search query."),
       false,
     );
   });
@@ -66,9 +66,9 @@ void describe("MatrixView load errors", () => {
     });
     seedQueryError(client, ["torrents"], "GET /torrent failed");
 
-    const html = renderMatrix(client);
+    const markup = renderMatrix(client);
 
-    assert.ok(html.includes("Failed to load torrents."));
-    assert.ok(html.includes('role="alert"'));
+    assert.ok(markup.includes("Failed to load torrents."));
+    assert.ok(markup.includes('role="alert"'));
   });
 });
