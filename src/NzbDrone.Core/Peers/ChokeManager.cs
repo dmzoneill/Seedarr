@@ -143,9 +143,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                 return;
             }
 
-            var maxUploadSlots = _connectionManager != null
-                ? _connectionManager.GetDynamicUploadSlotCount(connections.FirstOrDefault(c => !string.IsNullOrEmpty(c.InfoHash))?.InfoHash)
-                : _configService.MaxUploadSlots;
+            var maxUploadSlots = ResolveGlobalUploadSlotBudget(connections);
             if (maxUploadSlots <= 0)
             {
                 maxUploadSlots = _configService.MaxUploadSlots;
@@ -357,6 +355,40 @@ public class ChokeManager : BackgroundService, IChokeManager
                 }
             }
         }
+    }
+
+    private int ResolveGlobalUploadSlotBudget(List<PeerConnection> connections)
+    {
+        if (_connectionManager == null)
+        {
+            return _configService.MaxUploadSlots;
+        }
+
+        // The dynamic count is per torrent. Using whichever swarm happens to own the
+        // first connection makes the global budget jump between rounds. Take the max
+        // so a quiet torrent cannot shrink the budget of a busy one.
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var maxSlots = 0;
+        foreach (var conn in connections)
+        {
+            if (string.IsNullOrEmpty(conn.InfoHash) || !seen.Add(conn.InfoHash))
+            {
+                continue;
+            }
+
+            var slots = _connectionManager.GetDynamicUploadSlotCount(conn.InfoHash);
+            if (slots > maxSlots)
+            {
+                maxSlots = slots;
+            }
+        }
+
+        if (seen.Count == 0)
+        {
+            return _connectionManager.GetDynamicUploadSlotCount(null);
+        }
+
+        return maxSlots;
     }
 
     public void ProcessOptimisticUnchoke()
