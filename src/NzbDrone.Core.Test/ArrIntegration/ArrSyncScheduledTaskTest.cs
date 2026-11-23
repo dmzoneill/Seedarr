@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.ArrIntegration;
@@ -34,7 +36,7 @@ public class ArrSyncScheduledTaskTest
 
         _task.Execute(CancellationToken.None);
 
-        _arrSyncService.DidNotReceive().Sync();
+        _arrSyncService.DidNotReceive().Sync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -48,7 +50,7 @@ public class ArrSyncScheduledTaskTest
 
         _task.Execute(CancellationToken.None);
 
-        _arrSyncService.DidNotReceive().Sync();
+        _arrSyncService.DidNotReceive().Sync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -62,7 +64,7 @@ public class ArrSyncScheduledTaskTest
 
         _task.Execute(CancellationToken.None);
 
-        _arrSyncService.DidNotReceive().Sync();
+        _arrSyncService.DidNotReceive().Sync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -74,11 +76,12 @@ public class ArrSyncScheduledTaskTest
             new() { Enable = true, SyncEnabled = true }
         };
         _connectionFactory.All().Returns(connections);
-        _arrSyncService.Sync().Returns(new SyncResult { Added = 2, Skipped = 1, Failed = 0 });
+        _arrSyncService.Sync(Arg.Any<CancellationToken>())
+            .Returns(new SyncResult { Added = 2, Skipped = 1, Failed = 0 });
 
         _task.Execute(CancellationToken.None);
 
-        _arrSyncService.Received(1).Sync();
+        _arrSyncService.Received(1).Sync(CancellationToken.None);
     }
 
     [Test]
@@ -89,7 +92,7 @@ public class ArrSyncScheduledTaskTest
             new() { Enable = true, SyncEnabled = true }
         };
         _connectionFactory.All().Returns(connections);
-        _arrSyncService.When(s => s.Sync()).Do(_ => throw new Exception("Sync exploded"));
+        _arrSyncService.When(s => s.Sync(Arg.Any<CancellationToken>())).Do(_ => throw new Exception("Sync exploded"));
 
         Assert.DoesNotThrow(() => _task.Execute(CancellationToken.None));
     }
@@ -100,6 +103,54 @@ public class ArrSyncScheduledTaskTest
         _connectionFactory.All().Returns((List<ArrConnectionDefinition>)null);
 
         Assert.DoesNotThrow(() => _task.Execute(CancellationToken.None));
-        _arrSyncService.DidNotReceive().Sync();
+        _arrSyncService.DidNotReceive().Sync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void Execute_passes_the_scheduler_token_into_sync()
+    {
+        using var cts = new CancellationTokenSource();
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+        {
+            new() { Enable = true, SyncEnabled = true }
+        });
+        _arrSyncService.Sync(Arg.Any<CancellationToken>()).Returns(new SyncResult());
+
+        _task.Execute(cts.Token);
+
+        _arrSyncService.Received(1).Sync(cts.Token);
+    }
+
+    [Test]
+    public void Execute_rethrows_when_sync_is_cancelled()
+    {
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+        {
+            new() { Enable = true, SyncEnabled = true }
+        });
+        using var cts = new CancellationTokenSource();
+        _arrSyncService
+            .When(s => s.Sync(Arg.Any<CancellationToken>()))
+            .Do(_ =>
+            {
+                cts.Cancel();
+                throw new OperationCanceledException("cancelled", cts.Token);
+            });
+
+        Assert.Throws<OperationCanceledException>(() => _task.Execute(cts.Token));
+    }
+
+    [Test]
+    public void Execute_logs_and_continues_when_sync_times_out_without_cancellation()
+    {
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+        {
+            new() { Enable = true, SyncEnabled = true }
+        });
+        _arrSyncService
+            .When(s => s.Sync(Arg.Any<CancellationToken>()))
+            .Do(_ => throw new TaskCanceledException("timed out", new TimeoutException()));
+
+        Assert.DoesNotThrow(() => _task.Execute(CancellationToken.None));
     }
 }

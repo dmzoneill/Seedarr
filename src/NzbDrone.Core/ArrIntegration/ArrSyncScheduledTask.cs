@@ -41,7 +41,7 @@ public class ArrSyncScheduledTask : IScheduledTask
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var result = _arrSyncService.Sync();
+            var result = _arrSyncService.Sync(cancellationToken);
             if (result != null)
             {
                 _logger.Info(
@@ -50,6 +50,11 @@ public class ArrSyncScheduledTask : IScheduledTask
                     result.Skipped,
                     result.Failed);
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            _logger.Debug("Background Arr sync cancelled");
+            throw;
         }
         catch (Exception ex)
         {

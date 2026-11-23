@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using NUnit.Framework;
@@ -30,9 +32,16 @@ public class ArrSyncServiceTest
             ITorrentService torrentService,
             IArrConnection provider,
             IDownloadHistoryService downloadHistoryService = null,
+            IArrMetadataEnricherService metadataEnricherService = null,
             IConfigService configService = null,
             IRemotePathMappingService remotePathMappingService = null)
-            : base(connectionFactory, torrentService, downloadHistoryService, configService: configService, remotePathMappingService: remotePathMappingService)
+            : base(
+                connectionFactory,
+                torrentService,
+                downloadHistoryService,
+                metadataEnricherService,
+                configService: configService,
+                remotePathMappingService: remotePathMappingService)
         {
             _provider = provider;
         }
@@ -44,8 +53,25 @@ public class ArrSyncServiceTest
         IArrConnection provider,
         IDownloadHistoryService downloadHistoryService = null,
         IConfigService configService = null,
-        IRemotePathMappingService remotePathMappingService = null) =>
-        new TestableArrSyncService(_connectionFactory, _torrentService, provider, downloadHistoryService, configService, remotePathMappingService);
+        IRemotePathMappingService remotePathMappingService = null,
+        IArrMetadataEnricherService metadataEnricherService = null)
+    {
+        provider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                ci.Arg<CancellationToken>().ThrowIfCancellationRequested();
+                return Task.FromResult(provider.GetDownloadHistory());
+            });
+
+        return new TestableArrSyncService(
+            _connectionFactory,
+            _torrentService,
+            provider,
+            downloadHistoryService,
+            metadataEnricherService,
+            configService,
+            remotePathMappingService);
+    }
 
     private static ArrConnectionDefinition EnabledDefinition(string arrType = "Sonarr") =>
         new() { Enable = true, SyncEnabled = true, ArrType = arrType, Name = "Test" };
@@ -559,6 +585,41 @@ public class ArrSyncServiceTest
         _connectionFactory.Received(1).All();
     }
 
+    [Test]
+    public void Shared_arr_clients_use_a_bounded_timeout()
+    {
+        Assert.That(ArrConnectionResources.SharedClient.Timeout, Is.EqualTo(ArrConnectionResources.DefaultTimeout));
+        Assert.That(
+            ArrConnectionResources.SharedInsecureClient.Timeout,
+            Is.EqualTo(ArrConnectionResources.DefaultTimeout));
+        Assert.That(ArrConnectionResources.DefaultTimeout, Is.LessThanOrEqualTo(TimeSpan.FromSeconds(30)));
+    }
+
+    [Test]
+    public void Sync_stops_before_the_next_connection_when_cancelled()
+    {
+        var calls = 0;
+        var provider = Substitute.For<IArrConnection>();
+        using var cts = new CancellationTokenSource();
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+        {
+            EnabledDefinition("Sonarr"),
+            EnabledDefinition("Radarr")
+        });
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var service = CreateTestableService(provider);
+        provider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            calls++;
+            cts.Cancel();
+            return Task.FromResult(new List<ArrDownloadRecord>());
+        });
+
+        Assert.Throws<OperationCanceledException>(() => service.Sync(cts.Token));
+        Assert.That(calls, Is.EqualTo(1));
+    }
+
     // --- Inner sync loop body tests (via TestableArrSyncService) ---
 
     [Test]
@@ -1055,5 +1116,120 @@ public class ArrSyncServiceTest
         _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
             t.SourcePath == "/local/storage/tv/Episode1.mkv" &&
             t.SavePath == "/local/storage/tv/Episode1.mkv"));
+    }
+
+    [Test]
+    public void Sync_rethrows_when_history_fetch_is_cancelled()
+    {
+        var provider = Substitute.For<IArrConnection>();
+        using var cts = new CancellationTokenSource();
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition> { EnabledDefinition() });
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        var service = CreateTestableService(provider);
+        provider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>())
+            .Returns<Task<List<ArrDownloadRecord>>>(_ =>
+            {
+                cts.Cancel();
+                throw new OperationCanceledException("cancelled", cts.Token);
+            });
+
+        Assert.Throws<OperationCanceledException>(() => service.Sync(cts.Token));
+    }
+
+    [Test]
+    public void Sync_skips_only_the_connection_whose_http_request_timed_out()
+    {
+        var provider = Substitute.For<IArrConnection>();
+        var calls = 0;
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+        {
+            EnabledDefinition("Sonarr"),
+            EnabledDefinition("Radarr")
+        });
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        var service = CreateTestableService(provider);
+        provider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>())
+            .Returns<Task<List<ArrDownloadRecord>>>(_ =>
+            {
+                calls++;
+                if (calls == 1)
+                {
+                    // HttpClient.Timeout surfaces as TaskCanceledException while the sync token is not cancelled.
+                    throw new TaskCanceledException("timed out", new TimeoutException());
+                }
+
+                return Task.FromResult(new List<ArrDownloadRecord>());
+            });
+
+        var result = service.Sync(CancellationToken.None);
+
+        Assert.That(calls, Is.EqualTo(2), "The next Arr instance must still be synced");
+        Assert.That(result.Failed, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Sync_fetches_metadata_for_existing_skipped_and_added_records()
+    {
+        var provider = Substitute.For<IArrConnection>();
+        var calls = 0;
+        provider.GetDownloadHistory().Returns(_ =>
+        {
+            calls++;
+            if (calls == 1)
+            {
+                return new List<ArrDownloadRecord>
+                {
+                    new() { InfoHash = "existing", Title = "Existing", MediaId = 1 },
+                    new() { InfoHash = "added", Title = "Added", MediaId = 3 }
+                };
+            }
+
+            return new List<ArrDownloadRecord>
+            {
+                new() { InfoHash = "skipped", Title = "Skipped", MediaId = 2 }
+            };
+        });
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+        {
+            new() { Enable = true, SyncEnabled = true, EnableAutomaticAdd = true, ArrType = "Sonarr", Name = "Test" },
+            new() { Enable = true, SyncEnabled = true, EnableAutomaticAdd = false, ArrType = "Radarr", Name = "NoAdd" }
+        });
+        _torrentService.GetAll().Returns(new List<Torrent> { new() { InfoHash = "existing" } });
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(call => call.Arg<Torrent>());
+
+        var history = Substitute.For<IDownloadHistoryService>();
+        history.GetByInfoHash("existing").Returns(new DownloadHistory { InfoHash = "existing", DataJson = "" });
+        history.GetByInfoHash("skipped").Returns((DownloadHistory)null);
+        history.GetByInfoHash("added").Returns(new DownloadHistory { InfoHash = "added", DataJson = "" });
+        history.RecordTorrentAdded(
+            Arg.Any<Torrent>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<string>())
+            .Returns(new DownloadHistory { InfoHash = "skipped" });
+
+        var enricher = Substitute.For<IArrMetadataEnricherService>();
+        enricher.FetchMetadataForRecord(
+            Arg.Any<ArrDownloadRecord>(),
+            Arg.Any<ArrConnectionDefinition>(),
+            Arg.Any<CancellationToken>())
+            .Returns(new MediaMetadata { Title = "Meta" });
+
+        var service = CreateTestableService(provider, history, metadataEnricherService: enricher);
+        service.Sync();
+
+        enricher.Received().FetchMetadataForRecord(
+            Arg.Is<ArrDownloadRecord>(r => r.InfoHash == "existing"),
+            Arg.Any<ArrConnectionDefinition>(),
+            Arg.Any<CancellationToken>());
+        enricher.Received().FetchMetadataForRecord(
+            Arg.Is<ArrDownloadRecord>(r => r.InfoHash == "skipped"),
+            Arg.Any<ArrConnectionDefinition>(),
+            Arg.Any<CancellationToken>());
+        enricher.Received().FetchMetadataForRecord(
+            Arg.Is<ArrDownloadRecord>(r => r.InfoHash == "added"),
+            Arg.Any<ArrConnectionDefinition>(),
+            Arg.Any<CancellationToken>());
     }
 }
