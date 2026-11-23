@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Xml;
 using NLog;
 using NzbDrone.Core.Indexers.Torznab;
@@ -507,74 +508,23 @@ public class NewznabIndexer : IIndexer
         });
     }
 
-    public System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, SearchQuery searchQuery)
-    {
-        var results = new System.Collections.Generic.List<ReleaseInfo>();
-        if (definition == null || string.IsNullOrWhiteSpace(definition.Url))
-        {
-            return results;
-        }
+    public System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, SearchQuery searchQuery) =>
+        Search(definition, searchQuery, CancellationToken.None);
 
-        searchQuery ??= new SearchQuery();
-
-        try
-        {
-            var url = BuildSearchUrl(definition, searchQuery);
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            if (!string.IsNullOrWhiteSpace(definition.ApiKey))
-            {
-                request.Headers.Add("X-Api-Key", definition.ApiKey);
-            }
-
-            using var response = Client.Send(request);
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.Warn("Newznab search returned status code {0}", response.StatusCode);
-                var httpEx = new HttpRequestException($"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}", null, response.StatusCode);
-                TimeSpan? retryAfter = null;
-                if (response.Headers.RetryAfter != null)
-                {
-                    if (response.Headers.RetryAfter.Delta.HasValue)
-                    {
-                        retryAfter = response.Headers.RetryAfter.Delta.Value;
-                    }
-                    else if (response.Headers.RetryAfter.Date.HasValue)
-                    {
-                        var diff = response.Headers.RetryAfter.Date.Value - DateTimeOffset.UtcNow;
-                        retryAfter = diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
-                    }
-                }
-
-                if (!retryAfter.HasValue && response.Headers.TryGetValues("Retry-After", out var rawValues))
-                {
-                    retryAfter = IndexerStatusService.ParseRetryAfter(string.Join(",", rawValues));
-                }
-
-                if (retryAfter.HasValue)
-                {
-                    httpEx.Data["RetryAfter"] = retryAfter.Value;
-                }
-
-                if (definition != null && definition.Id > 0 && _indexerStatusService != null)
-                {
-                    _indexerStatusService.RecordFailure(definition.Id, (int)response.StatusCode, httpEx.Message, httpEx, retryAfter);
-                    httpEx.Data["Recorded"] = true;
-                }
-
-                throw httpEx;
-            }
-
-            using var reader = new System.IO.StreamReader(response.Content.ReadAsStream());
-            var xml = reader.ReadToEnd();
-            return ParseResponse(xml, definition);
-        }
-        catch (Exception ex) when (ex is not HttpRequestException and not IndexerException)
-        {
-            _logger.Error(ex, "Failed to search Newznab at {0} for query '{1}'", definition.Url, searchQuery.Query);
-        }
-
-        return results;
-    }
+    public System.Collections.Generic.List<ReleaseInfo> Search(
+        IndexerDefinition definition,
+        SearchQuery searchQuery,
+        CancellationToken cancellationToken) =>
+        IndexerFeedSearch.Fetch(
+            "Newznab",
+            definition,
+            searchQuery,
+            cancellationToken,
+            Client,
+            BuildSearchUrl,
+            ParseResponse,
+            _indexerStatusService,
+            _logger);
 
     public System.Collections.Generic.List<ReleaseInfo> ParseResponse(string xml, IndexerDefinition definition = null)
     {

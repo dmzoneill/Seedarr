@@ -364,8 +364,12 @@ public class RssSyncService : IRssSyncService
                     List<ReleaseInfo> releases;
                     try
                     {
-                        releases = indexer.Search(indexerDef, query) ?? new List<ReleaseInfo>();
+                        releases = indexer.Search(indexerDef, query, cancellationToken) ?? new List<ReleaseInfo>();
                         _indexerStatusService?.RecordSuccess(indexerDef.Id);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
                     }
                     catch (Exception ex)
                     {
@@ -462,6 +466,10 @@ public class RssSyncService : IRssSyncService
                             RecordSeen(indexerDef.Id, release, RssSeenStatus.Rejected);
                         }
                     }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
