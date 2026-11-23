@@ -52,3 +52,57 @@ internal sealed class IndexerProxyState
         }
     }
 }
+
+public class IndexerClientHost
+{
+    private readonly HttpClient _httpClient;
+    private readonly IProxySettingsProvider _proxySettingsProvider;
+    private readonly HttpClient _fallback;
+    private readonly object _syncLock = new();
+    private readonly IndexerProxyState _proxyState = new();
+
+    protected IndexerClientHost(
+        HttpClient httpClient,
+        IProxySettingsProvider proxySettingsProvider,
+        HttpClient fallback)
+    {
+        _httpClient = httpClient;
+        _proxySettingsProvider = proxySettingsProvider;
+        _fallback = fallback;
+    }
+
+    internal HttpMessageHandler Handler
+    {
+        get
+        {
+            EnsureProxyClient();
+            return _proxyState.Handler;
+        }
+    }
+
+    internal HttpClient Client => GetHttpClient();
+
+    private HttpClient GetHttpClient()
+    {
+        if (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled)
+        {
+            EnsureProxyClient();
+            lock (_syncLock)
+            {
+                return _proxyState.Client ?? _fallback;
+            }
+        }
+
+        if (_httpClient != null)
+        {
+            return _httpClient;
+        }
+
+        return _fallback;
+    }
+
+    private void EnsureProxyClient()
+    {
+        _proxyState.Ensure(_proxySettingsProvider, _syncLock, _fallback);
+    }
+}

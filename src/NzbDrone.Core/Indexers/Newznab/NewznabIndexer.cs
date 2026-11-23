@@ -12,27 +12,11 @@ using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Indexers.Newznab;
 
-public class NewznabIndexer : IIndexer
+public class NewznabIndexer : IndexerClientHost, IIndexer
 {
     private static readonly HttpClient DefaultClient = new() { Timeout = TimeSpan.FromSeconds(30) };
-    private readonly HttpClient _httpClient;
     private readonly Logger _logger;
     private readonly IIndexerStatusService _indexerStatusService;
-    private readonly IProxySettingsProvider _proxySettingsProvider;
-
-    private readonly object _syncLock = new();
-    private readonly IndexerProxyState _proxyState = new();
-
-    internal HttpMessageHandler Handler
-    {
-        get
-        {
-            EnsureProxyClient();
-            return _proxyState.Handler;
-        }
-    }
-
-    internal HttpClient Client => GetHttpClient();
 
     public const int DefaultTtlMinutes = 15;
     public const int MinimumPollingIntervalMinutes = 10;
@@ -89,35 +73,10 @@ public class NewznabIndexer : IIndexer
         HttpClient httpClient = null,
         IIndexerStatusService indexerStatusService = null,
         IProxySettingsProvider proxySettingsProvider = null)
+        : base(httpClient, proxySettingsProvider, DefaultClient)
     {
-        _httpClient = httpClient;
         _indexerStatusService = indexerStatusService;
-        _proxySettingsProvider = proxySettingsProvider;
         _logger = LogManager.GetCurrentClassLogger();
-    }
-
-    private HttpClient GetHttpClient()
-    {
-        if (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled)
-        {
-            EnsureProxyClient();
-            lock (_syncLock)
-            {
-                return _proxyState.Client ?? DefaultClient;
-            }
-        }
-
-        if (_httpClient != null)
-        {
-            return _httpClient;
-        }
-
-        return DefaultClient;
-    }
-
-    private void EnsureProxyClient()
-    {
-        _proxyState.Ensure(_proxySettingsProvider, _syncLock, DefaultClient);
     }
 
     public bool TestConnection(IndexerDefinition definition)
