@@ -10,6 +10,8 @@ using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
+using NzbDrone.Core.Peers.Extensions;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Peers;
 
@@ -1306,5 +1308,64 @@ public class ChokeManagerTest
                 Thread.Sleep(10);
             }
         }
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_slot_budget_does_not_depend_on_which_torrent_connected_first()
+    {
+        var config = Substitute.For<IConfigService>();
+        config.MaxUploadSlots.Returns(0);
+        config.MaxUploadSpeedKbps.Returns(0);
+        config.MaxGlobalConnections.Returns(0);
+        config.MaxPerTorrentConnections.Returns(0);
+
+        int CountUnchoked(bool smallSwarmFirst)
+        {
+            var connections = new ConnectionManager(
+                config,
+                Substitute.For<IPeerConnectionLogService>(),
+                new Lazy<ITorrentService>(() => Substitute.For<ITorrentService>()),
+                Substitute.For<IFastExtensionHandler>(),
+                Substitute.For<ITorrentEventLogService>());
+            var choke = new ChokeManager(connections, config);
+
+            void AddSwarm(string infoHash, int count, int portBase)
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    var peer = new PeerConnection(new MemoryStream(), "10.1.0." + ((i % 200) + 1), portBase + i)
+                    {
+                        InfoHash = infoHash,
+                        PeerInterested = true,
+                        AmChoking = true,
+                        UploadRate = 1000 + i,
+                        DownloadRate = 1000 + i
+                    };
+                    connections.Add(peer);
+                }
+            }
+
+            if (smallSwarmFirst)
+            {
+                AddSwarm("hashA", 5, 1000);
+                AddSwarm("hashB", 100, 2000);
+            }
+            else
+            {
+                AddSwarm("hashB", 100, 2000);
+                AddSwarm("hashA", 5, 1000);
+            }
+
+            choke.ProcessRegularUnchoke();
+            var unchoked = connections.GetAllConnections().Count(c => !c.AmChoking);
+            connections.DisconnectAll();
+            return unchoked;
+        }
+
+        var whenSmallConnectsFirst = CountUnchoked(true);
+        var whenLargeConnectsFirst = CountUnchoked(false);
+
+        Assert.That(whenSmallConnectsFirst, Is.EqualTo(whenLargeConnectsFirst));
+        Assert.That(whenSmallConnectsFirst, Is.EqualTo(19));
     }
 }
