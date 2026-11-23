@@ -599,8 +599,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     }
 
     [HttpPost("torrents/add")]
-    [RequestSizeLimit(RequestBodyLimits.TorrentUpload)]
-    [RequestFormLimits(MultipartBodyLengthLimit = RequestBodyLimits.TorrentUpload)]
+    [RequestSizeLimit(RequestBodyLimits.TorrentUploadRequest)]
+    [RequestFormLimits(MultipartBodyLengthLimit = RequestBodyLimits.TorrentUploadPerFile)]
     public async Task<ActionResult> AddTorrents([FromForm] QBitAddTorrentsRequest request = null)
     {
         request ??= new QBitAddTorrentsRequest();

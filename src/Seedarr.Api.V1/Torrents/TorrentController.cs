@@ -1498,8 +1498,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
     [HttpPost("upload")]
     [Authorize(Policy = Policies.Operator)]
-    [RequestSizeLimit(RequestBodyLimits.TorrentUpload)]
-    [RequestFormLimits(MultipartBodyLengthLimit = RequestBodyLimits.TorrentUpload)]
+    [RequestSizeLimit(RequestBodyLimits.TorrentUploadRequest)]
+    [RequestFormLimits(MultipartBodyLengthLimit = RequestBodyLimits.TorrentUploadPerFile)]
     [Consumes("multipart/form-data")]
     public IActionResult Upload(
         [FromForm(Name = "file")] List<IFormFile> files,
