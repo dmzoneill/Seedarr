@@ -92,9 +92,8 @@ public class RequestBodyLimitTest
         var body = new MemoryStream();
         foreach (var (size, index) in fileSizes.Select((size, index) => (size, index)))
         {
-            var header = $"--{boundary}\r\n" +
-                         $"Content-Disposition: form-data; name=\"file\"; filename=\"t{index}.torrent\"\r\n" +
-                         "Content-Type: application/x-bittorrent\r\n\r\n";
+            var disposition = $"Content-Disposition: form-data; name=\"file\"; filename=\"t{index}.torrent\"";
+            var header = $"--{boundary}\r\n{disposition}\r\nContent-Type: application/x-bittorrent\r\n\r\n";
             body.Write(Encoding.ASCII.GetBytes(header));
             body.Write(new byte[size]);
             body.Write(Encoding.ASCII.GetBytes("\r\n"));
