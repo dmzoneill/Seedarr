@@ -204,7 +204,9 @@ public class DownloadSimulationInvariantTest
 
         Assert.That(torrent.Downloaded, Is.GreaterThan(before));
         Assert.That(torrent.Downloaded, Is.LessThanOrEqualTo(torrent.TotalSize));
-        Assert.That(torrent.Downloaded - before, Is.LessThanOrEqualTo(SpeedPolicy.DefaultUnlimitedDownloadPerTorrentBps));
+        Assert.That(
+            torrent.Downloaded - before,
+            Is.LessThanOrEqualTo(SpeedPolicy.DefaultUnlimitedDownloadPerTorrentBps));
         Assert.That(torrent.Progress, Is.GreaterThanOrEqualTo(beforeProgress));
         Assert.That(torrent.Progress, Is.LessThanOrEqualTo(1.0));
     }
@@ -280,9 +282,18 @@ public class DownloadSimulationInvariantTest
                 policy.ProcessDownloading(torrents, limits, TimeSpan.FromMilliseconds(rng.Next(200, 2500)));
                 policy.EndSharedDownloadBudget();
 
-                Assert.That(torrent.Downloaded, Is.GreaterThanOrEqualTo(previousDownloaded), $"sample {sample} tick {tick} downloaded moved backwards");
-                Assert.That(torrent.Downloaded, Is.LessThanOrEqualTo(wanted), $"sample {sample} tick {tick} exceeded selected size");
-                Assert.That(torrent.Progress, Is.GreaterThanOrEqualTo(previousProgress), $"sample {sample} tick {tick} progress moved backwards");
+                Assert.That(
+                    torrent.Downloaded,
+                    Is.GreaterThanOrEqualTo(previousDownloaded),
+                    $"sample {sample} tick {tick} downloaded moved backwards");
+                Assert.That(
+                    torrent.Downloaded,
+                    Is.LessThanOrEqualTo(wanted),
+                    $"sample {sample} tick {tick} exceeded selected size");
+                Assert.That(
+                    torrent.Progress,
+                    Is.GreaterThanOrEqualTo(previousProgress),
+                    $"sample {sample} tick {tick} progress moved backwards");
                 Assert.That(torrent.Progress, Is.LessThanOrEqualTo(1.0));
                 if (cap == 0)
                 {

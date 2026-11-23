@@ -523,7 +523,7 @@ public class SpeedPolicy : ISpeedPolicy,
         ApplySimulatedDownload(torrents, incomplete, weights, allowance, tickInterval, checkThreshold: false);
     }
 
-    private readonly struct DownloadAllowance
+    private readonly record struct DownloadAllowance
     {
         public long PayloadCapBps { get; init; }
         public long MaxBytes { get; init; }
@@ -798,7 +798,9 @@ public class SpeedPolicy : ISpeedPolicy,
 
             if (bytesPerSecond > 0)
             {
-                var maxBurst = Math.Max(16384L, (long)Math.Round(bytesPerSecond * Math.Max(tickInterval.TotalSeconds * 2.0, 0.100)));
+                var maxBurst = Math.Max(
+                    16384L,
+                    (long)Math.Round(bytesPerSecond * Math.Max(tickInterval.TotalSeconds * 2.0, 0.100)));
                 if (bytesThisTick > maxBurst)
                 {
                     bytesThisTick = maxBurst;
