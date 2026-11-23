@@ -106,9 +106,18 @@ public class SpeedDistributionManagerTest
     }
 
     [Test]
-    public void DistributeSpeeds_with_zero_max_speed_should_use_default()
+    public void DistributeSpeeds_with_zero_max_speed_should_allocate_nothing()
     {
-        _manager.DistributeSpeeds(3, 0);
+        var speeds = _manager.DistributeSpeeds(3, 0);
+
+        Assert.That(speeds, Is.EqualTo(new long[] { 0L, 0L, 0L }));
+        _equalDistributor.DidNotReceive().Distribute(Arg.Any<long>(), Arg.Any<int>());
+    }
+
+    [Test]
+    public void DistributeSpeeds_with_negative_max_speed_should_use_default()
+    {
+        _manager.DistributeSpeeds(3, -1);
 
         _equalDistributor.Received(1).Distribute(1_048_576L, 3);
     }
@@ -228,6 +237,24 @@ public class SpeedDistributionManagerTest
 
         Assert.That(speeds, Has.Length.EqualTo(3));
         Assert.That(speeds[0], Is.GreaterThan(speeds[2]));
+    }
+
+    [Test]
+    public void DistributeDownloadSpeeds_with_zero_cap_returns_zeros()
+    {
+        var speeds = _manager.DistributeDownloadSpeeds(4, 0, new[] { 1.0, 1.0, 1.0, 1.0 });
+
+        Assert.That(speeds.Sum(), Is.EqualTo(0L));
+        _equalDistributor.DidNotReceive().Distribute(Arg.Any<long>(), Arg.Any<int>());
+    }
+
+    [Test]
+    public void DistributeUploadSpeeds_with_zero_cap_returns_zeros()
+    {
+        var speeds = _manager.DistributeUploadSpeeds(4, 0, new[] { 1.0, 1.0, 1.0, 1.0 });
+
+        Assert.That(speeds.Sum(), Is.EqualTo(0L));
+        _equalDistributor.DidNotReceive().Distribute(Arg.Any<long>(), Arg.Any<int>());
     }
 
     [Test]

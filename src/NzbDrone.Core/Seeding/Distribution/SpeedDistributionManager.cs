@@ -65,7 +65,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
     public long[] DistributeSpeeds(int torrentCount)
     {
-        return DistributeSpeeds(torrentCount, 0);
+        return DistributeSpeeds(torrentCount, DefaultBytesPerSecond);
     }
 
     public long[] DistributeSpeeds(int torrentCount, long maxSpeed)
@@ -519,6 +519,18 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
     private long[] DistributeWithConfig(int torrentCount, long maxSpeed, string algorithm, int spreadPercentage)
     {
+        if (torrentCount <= 0)
+        {
+            return Array.Empty<long>();
+        }
+
+        // 0 is a pause (no transfer). Only a negative cap, including SpeedLimits.Unlimited,
+        // means "no explicit cap" and falls back to the default positive rate.
+        if (maxSpeed == 0)
+        {
+            return new long[torrentCount];
+        }
+
         var distributor = _distributors.FirstOrDefault(d =>
                 string.Equals(d.Name, algorithm, StringComparison.OrdinalIgnoreCase))
             ?? _distributors.First();

@@ -591,14 +591,22 @@ public class SeedingEngine : BackgroundService, IHandle<ApplicationShutdownReque
             }
         }
 
-        if (downloadingTorrents.Count > 0)
+        _speedPolicy.BeginSharedDownloadBudget(limits);
+        try
         {
-            _speedPolicy.ProcessDownloading(downloadingTorrents, limits, actualDelta);
-        }
+            if (downloadingTorrents.Count > 0)
+            {
+                _speedPolicy.ProcessDownloading(downloadingTorrents, limits, actualDelta);
+            }
 
-        if (seedingTorrents.Count > 0)
+            if (seedingTorrents.Count > 0)
+            {
+                _speedPolicy.ProcessSeeding(seedingTorrents, limits, actualDelta);
+            }
+        }
+        finally
         {
-            _speedPolicy.ProcessSeeding(seedingTorrents, limits, actualDelta);
+            _speedPolicy.EndSharedDownloadBudget();
         }
 
         var globalRatioLimit = _configService.GlobalSeedRatioLimit;

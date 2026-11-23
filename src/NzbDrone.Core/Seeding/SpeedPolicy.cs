@@ -22,6 +22,19 @@ public class SpeedPolicy : ISpeedPolicy,
     IHandle<TorrentDeletedEvent>
 {
     public const long DefaultMaxUploadPerLeecherBps = 2_500_000;
+
+    /// <summary>
+    /// Per-torrent ceiling used when download is unlimited. A real client does not
+    /// pull 1 GB/s on every torrent; 10 MiB/s is a fast single-torrent rate.
+    /// </summary>
+    public const long DefaultUnlimitedDownloadPerTorrentBps = 10L * 1024 * 1024;
+
+    /// <summary>
+    /// Client-wide ceiling used when download is unlimited, so hundreds of torrents
+    /// cannot sum to multiple GB/s. 100 MiB/s is about an 800 Mbps link.
+    /// </summary>
+    public const long DefaultUnlimitedDownloadAggregateBps = 100L * 1024 * 1024;
+
     public const double WarmUpWindowSeconds = 180.0;
 
     public const int TcpIpHeaderBytes = 40;
@@ -108,6 +121,12 @@ public class SpeedPolicy : ISpeedPolicy,
     private readonly ITorrentFileService _torrentFileService;
     private readonly ConcurrentDictionary<int, double> _downloadFractionalTokens = new();
     private readonly ConcurrentDictionary<int, double> _uploadFractionalTokens = new();
+    private bool _budgetActive;
+    private int _budgetEpoch;
+    private int _downloadEpochApplied = -1;
+    private long _budgetPayloadCapBps;
+    private long _budgetRemainingBytes;
+    private bool _budgetUnlimited;
     public IBandwidthLimiter BandwidthLimiter { get; set; }
 
     public SpeedPolicy(
@@ -200,88 +219,31 @@ public class SpeedPolicy : ISpeedPolicy,
             activePriorityWeights[j] = GetPriorityWeight(torrents[activeTorrentIndices[j]].Priority);
         }
 
-        var variationMin = _configService.SpeedVariationMin;
-        var variationMax = _configService.SpeedVariationMax;
-        var thresholdPercent = _configService.DownloadThresholdPercent;
-        var threshold = thresholdPercent / 100.0;
-        var effectiveFactor = EffectiveOverheadFactor;
-        var maxDownloadSpeed = limits.MaxDownloadSpeed;
-        if (maxDownloadSpeed != SpeedLimits.Unlimited && effectiveFactor > 0)
-        {
-            maxDownloadSpeed = (long)Math.Round(maxDownloadSpeed / (1.0 + effectiveFactor));
-            if (OutOfBandOverheadBytesPerSec > 0)
-            {
-                maxDownloadSpeed = Math.Max(0L, maxDownloadSpeed - OutOfBandOverheadBytesPerSec);
-            }
-        }
+        var allowance = TakeDownloadAllowance(limits, isDownloadPass: true, tickInterval);
+        var applied = ApplySimulatedDownload(
+            torrents,
+            activeTorrentIndices,
+            activePriorityWeights,
+            allowance,
+            tickInterval,
+            checkThreshold: true);
+        RememberDownloadRemainder(allowance, applied);
+    }
 
-        long[] speeds;
-        if (activeCount > 0)
-        {
-            if (maxDownloadSpeed == SpeedLimits.Unlimited)
-            {
-                speeds = new long[activeCount];
-                for (var j = 0; j < activeCount; j++)
-                {
-                    speeds[j] = (long)(1_000_000_000L * activePriorityWeights[j]);
-                }
-            }
-            else
-            {
-                speeds = _distributionManager.DistributeDownloadSpeeds(activeCount, maxDownloadSpeed, activePriorityWeights)
-                    ?? Array.Empty<long>();
-            }
-        }
-        else
-        {
-            speeds = Array.Empty<long>();
-        }
+    public void BeginSharedDownloadBudget(SpeedLimits limits)
+    {
+        _budgetEpoch++;
+        _budgetActive = true;
+        _budgetUnlimited = IsUnlimitedDownload(limits);
+        _budgetPayloadCapBps = _budgetUnlimited
+            ? DefaultUnlimitedDownloadAggregateBps
+            : ResolvePayloadDownloadCap(limits);
+        _budgetRemainingBytes = PayloadBytesForTick(_budgetPayloadCapBps, TimeSpan.FromSeconds(1));
+    }
 
-        for (var j = 0; j < activeCount; j++)
-        {
-            var torrent = torrents[activeTorrentIndices[j]];
-            var bytesPerSecond = j < speeds.Length ? speeds[j] : 0L;
-
-            var effectiveDlLimit = GetDownloadLimit(torrent);
-
-            if (effectiveDlLimit > 0)
-            {
-                var perTorrentLimitBps = (long)effectiveDlLimit * 1024;
-                bytesPerSecond = Math.Min(bytesPerSecond, perTorrentLimitBps);
-            }
-
-            if (BandwidthLimiter != null && !string.IsNullOrEmpty(torrent.InfoHash))
-            {
-                var dlLimit = effectiveDlLimit > 0 ? (long)effectiveDlLimit * 1024 : 0;
-                var ulLimit = GetUploadLimit(torrent) > 0 ? (long)GetUploadLimit(torrent) * 1024 : 0;
-                BandwidthLimiter.SetTorrentLimits(torrent.InfoHash, ulLimit, dlLimit);
-            }
-
-            var variationFactor = variationMin + (_random.NextDouble() * (variationMax - variationMin));
-            var currentFraction = _downloadFractionalTokens.TryGetValue(torrent.Id, out var frac) ? frac : 0.0;
-            var rawBytes = (bytesPerSecond * variationFactor * tickInterval.TotalSeconds) + currentFraction;
-            var bytesThisTick = (long)rawBytes;
-            _downloadFractionalTokens[torrent.Id] = rawBytes - bytesThisTick;
-
-            if (bytesPerSecond > 0)
-            {
-                var maxBurst = Math.Max(16384L, (long)Math.Round(bytesPerSecond * Math.Max(tickInterval.TotalSeconds * 2.0, 0.100)));
-                if (bytesThisTick > maxBurst)
-                {
-                    bytesThisTick = maxBurst;
-                }
-            }
-
-            torrent.Downloaded += bytesThisTick;
-
-            torrent.DownloadSpeed = bytesPerSecond;
-
-            UpdateDownloadProgress(torrent);
-
-            torrent.UpdateRatio();
-
-            _stateMachine.CheckDownloadThreshold(torrent, threshold);
-        }
+    public void EndSharedDownloadBudget()
+    {
+        _budgetActive = false;
     }
 
     public void ProcessSeeding(List<Torrent> torrents, SpeedLimits limits, TimeSpan tickInterval)
@@ -525,15 +487,433 @@ public class SpeedPolicy : ISpeedPolicy,
             torrent.SimulatedUploaded += uploadBytesThisTick;
 
             torrent.UpdateRatio();
+        }
 
-            if (!torrent.ForceCompleted && torrent.Progress > 0.0 && torrent.Downloaded > 0 && torrent.Progress < 1.0 && torrent.TotalSize > 0)
+        ApplyResidualDownload(torrents, limits, tickInterval);
+    }
+
+    private void ApplyResidualDownload(List<Torrent> torrents, SpeedLimits limits, TimeSpan tickInterval)
+    {
+        var incomplete = new List<int>();
+        for (var i = 0; i < torrents.Count; i++)
+        {
+            var torrent = torrents[i];
+            if (!torrent.ForceCompleted &&
+                torrent.Progress > 0.0 &&
+                torrent.Downloaded > 0 &&
+                torrent.Progress < 1.0 &&
+                torrent.TotalSize > 0)
             {
-                var dlVariationFactor = variationMin + (_random.NextDouble() * (variationMax - variationMin));
-                var dlBytesThisTick = (long)(limits.MaxDownloadSpeed * dlVariationFactor * tickInterval.TotalSeconds / Math.Max(1, torrents.Count));
-
-                torrent.Downloaded += dlBytesThisTick;
-                UpdateDownloadProgress(torrent);
+                incomplete.Add(i);
             }
+        }
+
+        var weights = new double[incomplete.Count];
+        for (var i = 0; i < incomplete.Count; i++)
+        {
+            weights[i] = GetPriorityWeight(torrents[incomplete[i]].Priority);
+        }
+
+        var allowance = TakeDownloadAllowance(limits, isDownloadPass: false, tickInterval);
+        if (incomplete.Count == 0)
+        {
+            return;
+        }
+
+        ApplySimulatedDownload(torrents, incomplete, weights, allowance, tickInterval, checkThreshold: false);
+    }
+
+    private readonly record struct DownloadAllowance
+    {
+        public long PayloadCapBps { get; init; }
+        public long MaxBytes { get; init; }
+        public bool Unlimited { get; init; }
+    }
+
+    private static bool IsUnlimitedDownload(SpeedLimits limits)
+    {
+        return limits == null || limits.MaxDownloadSpeed < 0;
+    }
+
+    private long ResolvePayloadDownloadCap(SpeedLimits limits)
+    {
+        if (limits == null)
+        {
+            return SpeedLimits.Unlimited;
+        }
+
+        var max = limits.MaxDownloadSpeed;
+        if (max == 0)
+        {
+            return 0;
+        }
+
+        if (max < 0)
+        {
+            return SpeedLimits.Unlimited;
+        }
+
+        var effectiveFactor = EffectiveOverheadFactor;
+        if (effectiveFactor > 0)
+        {
+            max = (long)Math.Round(max / (1.0 + effectiveFactor));
+            if (OutOfBandOverheadBytesPerSec > 0)
+            {
+                max = Math.Max(0L, max - OutOfBandOverheadBytesPerSec);
+            }
+        }
+
+        return max;
+    }
+
+    private static long PayloadBytesForTick(long payloadCapBps, TimeSpan tickInterval)
+    {
+        if (payloadCapBps < 0)
+        {
+            return -1;
+        }
+
+        if (payloadCapBps == 0 || tickInterval.TotalSeconds <= 0)
+        {
+            return 0;
+        }
+
+        var bytes = payloadCapBps * tickInterval.TotalSeconds;
+        if (double.IsNaN(bytes) || double.IsInfinity(bytes) || bytes >= long.MaxValue)
+        {
+            return long.MaxValue;
+        }
+
+        return Math.Max(0L, (long)Math.Round(bytes));
+    }
+
+    private DownloadAllowance TakeDownloadAllowance(SpeedLimits limits, bool isDownloadPass, TimeSpan tickInterval)
+    {
+        if (isDownloadPass)
+        {
+            long capBps;
+            var unlimited = false;
+            if (_budgetActive && _downloadEpochApplied != _budgetEpoch)
+            {
+                capBps = _budgetPayloadCapBps;
+                unlimited = _budgetUnlimited;
+                _downloadEpochApplied = _budgetEpoch;
+            }
+            else
+            {
+                unlimited = IsUnlimitedDownload(limits);
+                capBps = unlimited ? DefaultUnlimitedDownloadAggregateBps : ResolvePayloadDownloadCap(limits);
+                _budgetEpoch++;
+                _budgetActive = true;
+                _budgetUnlimited = unlimited;
+                _budgetPayloadCapBps = capBps;
+                _downloadEpochApplied = _budgetEpoch;
+            }
+
+            return new DownloadAllowance
+            {
+                PayloadCapBps = capBps,
+                MaxBytes = PayloadBytesForTick(capBps, tickInterval),
+                Unlimited = unlimited
+            };
+        }
+
+        if (_budgetActive && _downloadEpochApplied == _budgetEpoch)
+        {
+            var remainingBytes = _budgetRemainingBytes;
+            var unlimited = _budgetUnlimited;
+            _budgetActive = false;
+            if (remainingBytes < 0)
+            {
+                return new DownloadAllowance
+                {
+                    PayloadCapBps = unlimited ? DefaultUnlimitedDownloadAggregateBps : SpeedLimits.Unlimited,
+                    MaxBytes = -1,
+                    Unlimited = unlimited
+                };
+            }
+
+            var capBps = tickInterval.TotalSeconds > 0
+                ? (long)Math.Ceiling(remainingBytes / tickInterval.TotalSeconds)
+                : 0L;
+            return new DownloadAllowance
+            {
+                PayloadCapBps = capBps,
+                MaxBytes = remainingBytes,
+                Unlimited = unlimited && remainingBytes > 0
+            };
+        }
+
+        if (_budgetActive)
+        {
+            var capBps = _budgetPayloadCapBps;
+            var unlimited = _budgetUnlimited;
+            _budgetActive = false;
+            return new DownloadAllowance
+            {
+                PayloadCapBps = capBps,
+                MaxBytes = PayloadBytesForTick(capBps, tickInterval),
+                Unlimited = unlimited
+            };
+        }
+
+        var standaloneUnlimited = IsUnlimitedDownload(limits);
+        var standaloneCap = standaloneUnlimited
+            ? DefaultUnlimitedDownloadAggregateBps
+            : ResolvePayloadDownloadCap(limits);
+        return new DownloadAllowance
+        {
+            PayloadCapBps = standaloneCap,
+            MaxBytes = PayloadBytesForTick(standaloneCap, tickInterval),
+            Unlimited = standaloneUnlimited
+        };
+    }
+
+    private void RememberDownloadRemainder(DownloadAllowance allowance, long appliedBytes)
+    {
+        if (!_budgetActive || _downloadEpochApplied != _budgetEpoch)
+        {
+            return;
+        }
+
+        if (allowance.MaxBytes < 0)
+        {
+            _budgetRemainingBytes = -1;
+            return;
+        }
+
+        _budgetRemainingBytes = Math.Max(0L, allowance.MaxBytes - Math.Max(0L, appliedBytes));
+    }
+
+    private long[] AllocateDownloadRates(int count, DownloadAllowance allowance, double[] weights)
+    {
+        if (count <= 0)
+        {
+            return Array.Empty<long>();
+        }
+
+        if (allowance.PayloadCapBps == 0 || allowance.MaxBytes == 0)
+        {
+            return new long[count];
+        }
+
+        if (allowance.Unlimited)
+        {
+            var speeds = new long[count];
+            long sum = 0;
+            for (var i = 0; i < count; i++)
+            {
+                var weight = weights != null && i < weights.Length && weights[i] > 0 ? weights[i] : 1.0;
+                var rate = (long)Math.Round(DefaultUnlimitedDownloadPerTorrentBps * weight);
+                if (rate < 0)
+                {
+                    rate = 0;
+                }
+
+                speeds[i] = rate;
+                sum += rate;
+            }
+
+            var aggregate = allowance.PayloadCapBps > 0
+                ? allowance.PayloadCapBps
+                : DefaultUnlimitedDownloadAggregateBps;
+            if (sum > aggregate)
+            {
+                ScaleToTotal(speeds, aggregate);
+            }
+
+            return speeds;
+        }
+
+        return _distributionManager.DistributeDownloadSpeeds(count, allowance.PayloadCapBps, weights)
+            ?? Array.Empty<long>();
+    }
+
+    private long ApplySimulatedDownload(
+        List<Torrent> torrents,
+        List<int> indices,
+        double[] weights,
+        DownloadAllowance allowance,
+        TimeSpan tickInterval,
+        bool checkThreshold)
+    {
+        if (indices == null || indices.Count == 0)
+        {
+            return 0;
+        }
+
+        var rates = AllocateDownloadRates(indices.Count, allowance, weights);
+        var planned = new long[indices.Count];
+        var appliedRates = new long[indices.Count];
+        var variationMin = _configService.SpeedVariationMin;
+        var variationMax = _configService.SpeedVariationMax;
+        if (variationMax < variationMin)
+        {
+            variationMax = variationMin;
+        }
+
+        var threshold = checkThreshold ? _configService.DownloadThresholdPercent / 100.0 : 0.0;
+
+        for (var j = 0; j < indices.Count; j++)
+        {
+            var torrent = torrents[indices[j]];
+            var bytesPerSecond = j < rates.Length ? rates[j] : 0L;
+            if (bytesPerSecond < 0)
+            {
+                bytesPerSecond = 0;
+            }
+
+            var effectiveDlLimit = GetDownloadLimit(torrent);
+            if (effectiveDlLimit > 0)
+            {
+                bytesPerSecond = Math.Min(bytesPerSecond, (long)effectiveDlLimit * 1024L);
+            }
+
+            appliedRates[j] = bytesPerSecond;
+
+            if (BandwidthLimiter != null && !string.IsNullOrEmpty(torrent.InfoHash))
+            {
+                var dlLimit = effectiveDlLimit > 0 ? (long)effectiveDlLimit * 1024L : 0L;
+                var uploadLimit = GetUploadLimit(torrent);
+                var ulLimit = uploadLimit > 0 ? (long)uploadLimit * 1024L : 0L;
+                BandwidthLimiter.SetTorrentLimits(torrent.InfoHash, ulLimit, dlLimit);
+            }
+
+            var span = Math.Max(0.0, variationMax - variationMin);
+            var variationFactor = variationMin + (_random.NextDouble() * span);
+            var currentFraction = _downloadFractionalTokens.TryGetValue(torrent.Id, out var frac) ? frac : 0.0;
+            var rawBytes = (bytesPerSecond * variationFactor * tickInterval.TotalSeconds) + currentFraction;
+            if (double.IsNaN(rawBytes) || double.IsInfinity(rawBytes) || rawBytes < 0)
+            {
+                rawBytes = currentFraction > 0 ? currentFraction : 0;
+            }
+
+            var bytesThisTick = (long)rawBytes;
+            if (bytesThisTick < 0)
+            {
+                bytesThisTick = 0;
+            }
+
+            _downloadFractionalTokens[torrent.Id] = rawBytes - bytesThisTick;
+
+            if (bytesPerSecond > 0)
+            {
+                var maxBurst = Math.Max(
+                    16384L,
+                    (long)Math.Round(bytesPerSecond * Math.Max(tickInterval.TotalSeconds * 2.0, 0.100)));
+                if (bytesThisTick > maxBurst)
+                {
+                    bytesThisTick = maxBurst;
+                }
+            }
+
+            var room = RemainingSelectedBytes(torrent);
+            if (room >= 0 && bytesThisTick > room)
+            {
+                bytesThisTick = room;
+            }
+
+            planned[j] = bytesThisTick;
+        }
+
+        if (allowance.MaxBytes >= 0)
+        {
+            ScaleToTotal(planned, allowance.MaxBytes);
+        }
+
+        long applied = 0;
+        for (var j = 0; j < indices.Count; j++)
+        {
+            var torrent = torrents[indices[j]];
+            var bytesThisTick = planned[j];
+            if (bytesThisTick < 0)
+            {
+                bytesThisTick = 0;
+            }
+
+            torrent.Downloaded += bytesThisTick;
+            applied += bytesThisTick;
+            torrent.DownloadSpeed = appliedRates[j];
+            UpdateDownloadProgress(torrent);
+            torrent.UpdateRatio();
+
+            if (checkThreshold)
+            {
+                _stateMachine.CheckDownloadThreshold(torrent, threshold);
+            }
+        }
+
+        return applied;
+    }
+
+    private long RemainingSelectedBytes(Torrent torrent)
+    {
+        var selected = GetSelectedSize(torrent);
+        if (selected <= 0)
+        {
+            return -1;
+        }
+
+        var room = selected - torrent.Downloaded;
+        return room > 0 ? room : 0;
+    }
+
+    private long GetSelectedSize(Torrent torrent)
+    {
+        var files = torrent.Files ?? _torrentFileService?.GetByTorrentId(torrent.Id);
+        var isSelective = files != null && files.Count > 0 && _pieceBoundaryMasker.IsSelectiveDownload(files);
+        return isSelective ? _pieceBoundaryMasker.CalculateWantedSize(torrent, files) : torrent.TotalSize;
+    }
+
+    private static void ScaleToTotal(long[] amounts, long maxTotal)
+    {
+        if (amounts == null || amounts.Length == 0)
+        {
+            return;
+        }
+
+        if (maxTotal <= 0)
+        {
+            Array.Clear(amounts, 0, amounts.Length);
+            return;
+        }
+
+        long total = 0;
+        for (var i = 0; i < amounts.Length; i++)
+        {
+            if (amounts[i] < 0)
+            {
+                amounts[i] = 0;
+            }
+
+            total += amounts[i];
+        }
+
+        if (total <= maxTotal)
+        {
+            return;
+        }
+
+        var scale = (double)maxTotal / total;
+        long scaled = 0;
+        for (var i = 0; i < amounts.Length; i++)
+        {
+            amounts[i] = (long)(amounts[i] * scale);
+            scaled += amounts[i];
+        }
+
+        var remainder = maxTotal - scaled;
+        if (remainder <= 0)
+        {
+            return;
+        }
+
+        var order = Enumerable.Range(0, amounts.Length)
+            .OrderByDescending(i => amounts[i])
+            .ToList();
+        for (var r = 0; r < remainder; r++)
+        {
+            amounts[order[r % order.Count]]++;
         }
     }
 
@@ -560,17 +940,20 @@ public class SpeedPolicy : ISpeedPolicy,
 
     private void UpdateDownloadProgress(Torrent torrent)
     {
-        var files = torrent.Files ?? _torrentFileService?.GetByTorrentId(torrent.Id);
-        var isSelective = files != null && files.Count > 0 && _pieceBoundaryMasker.IsSelectiveDownload(files);
-        var wantedSize = isSelective ? _pieceBoundaryMasker.CalculateWantedSize(torrent, files) : torrent.TotalSize;
-        var targetSize = isSelective ? wantedSize : torrent.TotalSize;
+        var targetSize = GetSelectedSize(torrent);
 
         if (targetSize > 0)
         {
             var wasComplete = torrent.Progress >= 1.0;
-            torrent.Progress = torrent.Downloaded >= targetSize
+            var nextProgress = torrent.Downloaded >= targetSize
                 ? 1.0
                 : Math.Min(1.0, Math.Round((double)torrent.Downloaded / targetSize, 6));
+            if (nextProgress < torrent.Progress)
+            {
+                nextProgress = torrent.Progress;
+            }
+
+            torrent.Progress = nextProgress;
 
             if (!wasComplete && torrent.Progress >= 1.0)
             {
