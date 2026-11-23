@@ -595,7 +595,8 @@ namespace NzbDrone.Core.Test.Indexers
                 IndexerId = 1
             };
 
-            mockIndexer.Search(enabledIndexer, Arg.Any<SearchQuery>()).Returns(new List<ReleaseInfo> { releaseMatching, releaseNonMatching });
+            mockIndexer.Search(enabledIndexer, Arg.Any<SearchQuery>(), Arg.Any<CancellationToken>())
+                .Returns(new List<ReleaseInfo> { releaseMatching, releaseNonMatching });
             torrentService.ExistsByInfoHash(Arg.Any<string>()).Returns(false);
             torrentService.Add(Arg.Any<Torrent>()).Returns(callInfo => callInfo.Arg<Torrent>());
 
@@ -612,7 +613,8 @@ namespace NzbDrone.Core.Test.Indexers
             Assert.That(grabbedCount, Is.EqualTo(1));
             torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.InfoHash == "hash111111111111111111111111111111111111"));
             downloadHistoryRepo.Received(1).Insert(Arg.Is<DownloadHistory>(dh => dh.InfoHash == "hash111111111111111111111111111111111111"));
-            mockIndexer.DidNotReceive().Search(disabledRssIndexer, Arg.Any<SearchQuery>());
+            mockIndexer.DidNotReceive()
+                .Search(disabledRssIndexer, Arg.Any<SearchQuery>(), Arg.Any<CancellationToken>());
         }
 
         [Test]
@@ -634,7 +636,8 @@ namespace NzbDrone.Core.Test.Indexers
             var relHistory = new ReleaseInfo { Title = "Rel.History", InfoHash = "hash-history", Size = 100, Seeders = 5 };
             var relNew = new ReleaseInfo { Title = "Rel.New", InfoHash = "hash-new", Size = 100, Seeders = 5 };
 
-            mockIndexer.Search(indexerDef, Arg.Any<SearchQuery>()).Returns(new List<ReleaseInfo> { relActive, relHistory, relNew });
+            mockIndexer.Search(indexerDef, Arg.Any<SearchQuery>(), Arg.Any<CancellationToken>())
+                .Returns(new List<ReleaseInfo> { relActive, relHistory, relNew });
 
             // Active in torrent service
             torrentService.ExistsByInfoHash("hash-active").Returns(true);
@@ -660,6 +663,55 @@ namespace NzbDrone.Core.Test.Indexers
             torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.InfoHash == "hash-new"));
             torrentService.DidNotReceive().Add(Arg.Is<Torrent>(t => t.InfoHash == "hash-active"));
             torrentService.DidNotReceive().Add(Arg.Is<Torrent>(t => t.InfoHash == "hash-history"));
+        }
+
+        [Test]
+        public void Sync_aborts_the_cycle_when_search_is_cancelled()
+        {
+            var indexerRepo = Substitute.For<IIndexerRepository>();
+            var mockIndexer = Substitute.For<IIndexer>();
+            var indexer = new IndexerDefinition { Id = 1, Name = "Indexer", Enable = true, EnableRss = true };
+            indexerRepo.All().Returns(new List<IndexerDefinition> { indexer });
+            using var cts = new CancellationTokenSource();
+            mockIndexer
+                .Search(indexer, Arg.Any<SearchQuery>(), Arg.Any<CancellationToken>())
+                .Returns(_ =>
+                {
+                    cts.Cancel();
+                    throw new OperationCanceledException("search cancelled", cts.Token);
+                });
+
+            var service = new RssSyncService(
+                indexerRepository: indexerRepo,
+                indexerInstanceFactory: _ => mockIndexer);
+
+            Assert.Throws<OperationCanceledException>(() => service.Sync(
+                isManual: false,
+                cancellationToken: cts.Token));
+        }
+
+        [Test]
+        public void Sync_skips_only_the_indexer_whose_search_timed_out()
+        {
+            var indexerRepo = Substitute.For<IIndexerRepository>();
+            var slowIndexer = Substitute.For<IIndexer>();
+            var healthyIndexer = Substitute.For<IIndexer>();
+            var slow = new IndexerDefinition { Id = 1, Name = "Slow", Enable = true, EnableRss = true };
+            var healthy = new IndexerDefinition { Id = 2, Name = "Healthy", Enable = true, EnableRss = true };
+            indexerRepo.All().Returns(new List<IndexerDefinition> { slow, healthy });
+            slowIndexer
+                .Search(slow, Arg.Any<SearchQuery>(), Arg.Any<CancellationToken>())
+                .Returns(_ => throw new TaskCanceledException("timed out", new TimeoutException()));
+            healthyIndexer
+                .Search(healthy, Arg.Any<SearchQuery>(), Arg.Any<CancellationToken>())
+                .Returns(new List<ReleaseInfo>());
+
+            var service = new RssSyncService(
+                indexerRepository: indexerRepo,
+                indexerInstanceFactory: definition => definition.Id == slow.Id ? slowIndexer : healthyIndexer);
+
+            Assert.DoesNotThrow(() => service.Sync(isManual: false, cancellationToken: CancellationToken.None));
+            healthyIndexer.Received(1).Search(healthy, Arg.Any<SearchQuery>(), Arg.Any<CancellationToken>());
         }
     }
 }

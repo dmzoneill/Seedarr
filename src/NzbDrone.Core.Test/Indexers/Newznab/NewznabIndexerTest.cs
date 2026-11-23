@@ -46,6 +46,36 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
         }
 
         [Test]
+        public void Search_cancels_the_in_flight_http_call()
+        {
+            using var handler = new DelayUntilCancelledHandler();
+            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
+            var indexer = new NewznabIndexer(client);
+            var definition = new IndexerDefinition { Name = "Test", Url = "http://indexer.example/api" };
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+
+            var started = DateTime.UtcNow;
+            Assert.That(
+                () => indexer.Search(definition, new SearchQuery { Query = "linux" }, cts.Token),
+                Throws.InstanceOf<OperationCanceledException>());
+            Assert.That(DateTime.UtcNow - started, Is.LessThan(TimeSpan.FromSeconds(2)));
+        }
+
+        private sealed class DelayUntilCancelledHandler : HttpMessageHandler
+        {
+            protected override async Task<HttpResponseMessage> SendAsync(
+                HttpRequestMessage request,
+                CancellationToken cancellationToken)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("<rss version=\"2.0\"><channel></channel></rss>")
+                };
+            }
+        }
+
+        [Test]
         public void IndexerType_should_return_newznab()
         {
             Assert.That(_subject.IndexerType, Is.EqualTo("Newznab"));

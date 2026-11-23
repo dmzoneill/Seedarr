@@ -1,3 +1,4 @@
+using System.Threading;
 using NzbDrone.Core.ThingiProvider;
 
 namespace NzbDrone.Core.Indexers;
@@ -19,5 +20,14 @@ public interface IIndexer : IProvider
     byte[] FetchTorrentByHash(IndexerDefinition definition, string infoHash);
     System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, string query, string category = null, int offset = 0, int limit = 50);
     System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, SearchQuery searchQuery);
+    System.Collections.Generic.List<ReleaseInfo> Search(
+        IndexerDefinition definition,
+        SearchQuery searchQuery,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Search(definition, searchQuery);
+    }
+
     System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, TorznabSearchCriteria criteria);
 }
