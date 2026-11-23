@@ -33,7 +33,8 @@ namespace NzbDrone.Core.ArrIntegration
             _logger = LogManager.GetCurrentClassLogger();
         }
 
-        public Dictionary<string, ArrHistoryRecord> PreFetchDownloadHistories(CancellationToken cancellationToken = default)
+        public Dictionary<string, ArrHistoryRecord> PreFetchDownloadHistories(
+            CancellationToken cancellationToken = default)
         {
             var cache = new Dictionary<string, ArrHistoryRecord>(StringComparer.OrdinalIgnoreCase);
             var definitions = _connectionFactory?.All();
@@ -72,7 +73,7 @@ namespace NzbDrone.Core.ArrIntegration
                         }
                     }
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                     throw;
                 }
@@ -165,7 +166,7 @@ namespace NzbDrone.Core.ArrIntegration
                         }
                     }
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                     throw;
                 }
@@ -179,7 +180,9 @@ namespace NzbDrone.Core.ArrIntegration
             return LookupAndEnrichByTitle(history, cancellationToken);
         }
 
-        public MediaMetadata LookupAndEnrichByTitle(DownloadHistory history, CancellationToken cancellationToken = default)
+        public MediaMetadata LookupAndEnrichByTitle(
+            DownloadHistory history,
+            CancellationToken cancellationToken = default)
         {
             if (history == null || string.IsNullOrWhiteSpace(history.Title))
             {
@@ -219,7 +222,7 @@ namespace NzbDrone.Core.ArrIntegration
                         return metadata;
                     }
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                     throw;
                 }
@@ -232,7 +235,10 @@ namespace NzbDrone.Core.ArrIntegration
             return null;
         }
 
-        public MediaMetadata FetchMetadataForRecord(ArrDownloadRecord record, ArrConnectionDefinition definition, CancellationToken cancellationToken = default)
+        public MediaMetadata FetchMetadataForRecord(
+            ArrDownloadRecord record,
+            ArrConnectionDefinition definition,
+            CancellationToken cancellationToken = default)
         {
             if (record == null || definition == null)
             {
@@ -259,7 +265,9 @@ namespace NzbDrone.Core.ArrIntegration
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var metadata = provider.GetMediaDetailsAsync(record.MediaId.Value, cancellationToken).GetAwaiter().GetResult();
+                var metadata = provider.GetMediaDetailsAsync(
+                    record.MediaId.Value,
+                    cancellationToken).GetAwaiter().GetResult();
                 if (metadata != null)
                 {
                     if (string.IsNullOrEmpty(metadata.Title))
@@ -272,7 +280,7 @@ namespace NzbDrone.Core.ArrIntegration
 
                 return metadata;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 throw;
             }

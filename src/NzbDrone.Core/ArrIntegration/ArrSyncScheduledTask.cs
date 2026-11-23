@@ -51,7 +51,7 @@ public class ArrSyncScheduledTask : IScheduledTask
                     result.Failed);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             _logger.Debug("Background Arr sync cancelled");
             throw;

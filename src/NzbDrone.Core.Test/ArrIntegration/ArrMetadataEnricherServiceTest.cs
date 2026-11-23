@@ -212,8 +212,10 @@ namespace NzbDrone.Core.Test.ArrIntegration
                 new() { InfoHash = "HASH1", MediaId = 10, Title = "Show 1" },
                 new() { InfoHash = "HASH2", MediaId = 20, Title = "Show 2" }
             });
-            sonarrProvider.GetMediaDetailsAsync(10, Arg.Any<CancellationToken>()).Returns(new MediaMetadata { Title = "Show 1", MediaId = 10 });
-            sonarrProvider.GetMediaDetailsAsync(20, Arg.Any<CancellationToken>()).Returns(new MediaMetadata { Title = "Show 2", MediaId = 20 });
+            sonarrProvider.GetMediaDetailsAsync(10, Arg.Any<CancellationToken>())
+                .Returns(new MediaMetadata { Title = "Show 1", MediaId = 10 });
+            sonarrProvider.GetMediaDetailsAsync(20, Arg.Any<CancellationToken>())
+                .Returns(new MediaMetadata { Title = "Show 2", MediaId = 20 });
 
             var service = new ArrMetadataEnricherService(
                 _connectionFactory,
@@ -231,15 +233,44 @@ namespace NzbDrone.Core.Test.ArrIntegration
         [Test]
         public void PreFetch_and_history_lookup_propagate_cancellation()
         {
+            using var cts = new CancellationTokenSource();
             var provider = Substitute.For<IArrConnection>();
             provider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>())
-                .Returns<Task<List<ArrDownloadRecord>>>(_ => throw new OperationCanceledException("history"));
+                .Returns<Task<List<ArrDownloadRecord>>>(_ =>
+                {
+                    cts.Cancel();
+                    throw new OperationCanceledException("history", cts.Token);
+                });
             var service = CreateService(provider);
 
-            Assert.Throws<OperationCanceledException>(() => service.PreFetchDownloadHistories());
+            Assert.Throws<OperationCanceledException>(() => service.PreFetchDownloadHistories(cts.Token));
 
-            _downloadHistoryRepository.Get(1).Returns(new DownloadHistory { Id = 1, InfoHash = "abc", Title = "Show.S01E01" });
-            Assert.Throws<OperationCanceledException>(() => service.EnrichHistoryEntry(1));
+            _downloadHistoryRepository.Get(1)
+                .Returns(new DownloadHistory { Id = 1, InfoHash = "abc", Title = "Show.S01E01" });
+            Assert.Throws<OperationCanceledException>(() => service.EnrichHistoryEntry(1, null, cts.Token));
+        }
+
+        [Test]
+        public void Http_timeouts_skip_the_arr_instance_instead_of_aborting()
+        {
+            var provider = Substitute.For<IArrConnection>();
+            provider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>())
+                .Returns<Task<List<ArrDownloadRecord>>>(_ =>
+                    throw new TaskCanceledException("history", new TimeoutException()));
+            provider.LookupMediaAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns<Task<MediaMetadata>>(_ => throw new TaskCanceledException("lookup", new TimeoutException()));
+            provider.GetMediaDetailsAsync(9, Arg.Any<CancellationToken>())
+                .Returns<Task<MediaMetadata>>(_ => throw new TaskCanceledException("details", new TimeoutException()));
+            var service = CreateService(provider);
+            var history = new DownloadHistory { Id = 5, InfoHash = "abc", Title = "Show.S01E01" };
+            _downloadHistoryRepository.Get(5).Returns(history);
+            var definition = new ArrConnectionDefinition { Id = 1, Enable = true, ArrType = "Sonarr", Name = "S" };
+            var record = new ArrDownloadRecord { Title = "Show", MediaId = 9 };
+
+            Assert.That(service.PreFetchDownloadHistories(CancellationToken.None), Is.Empty);
+            Assert.DoesNotThrow(() => service.EnrichHistoryEntry(5, null, CancellationToken.None));
+            Assert.DoesNotThrow(() => service.LookupAndEnrichByTitle(history, CancellationToken.None));
+            Assert.That(service.FetchMetadataForRecord(record, definition, CancellationToken.None), Is.Null);
         }
 
         [Test]
@@ -250,7 +281,8 @@ namespace NzbDrone.Core.Test.ArrIntegration
             {
                 new() { InfoHash = "ABC", MediaId = 9, Title = "Show" }
             });
-            provider.GetMediaDetailsAsync(9, Arg.Any<CancellationToken>()).Returns(new MediaMetadata { Title = "Show", MediaId = 9 });
+            provider.GetMediaDetailsAsync(9, Arg.Any<CancellationToken>())
+                .Returns(new MediaMetadata { Title = "Show", MediaId = 9 });
             _downloadHistoryRepository.Get(1).Returns(new DownloadHistory { Id = 1, InfoHash = "abc", Title = "Show" });
 
             var metadata = CreateService(provider).EnrichHistoryEntry(1);
@@ -263,7 +295,8 @@ namespace NzbDrone.Core.Test.ArrIntegration
         public void LookupAndEnrichByTitle_uses_async_lookup_and_propagates_cancellation()
         {
             var provider = Substitute.For<IArrConnection>();
-            provider.LookupMediaAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new MediaMetadata { Title = "Show" });
+            provider.LookupMediaAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                .Returns(new MediaMetadata { Title = "Show" });
             var history = new DownloadHistory { Id = 4, Title = "Show.S01E01.1080p" };
             _downloadHistoryRepository.Get(4).Returns(history);
             provider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>()).Returns(new List<ArrDownloadRecord>());
@@ -272,21 +305,34 @@ namespace NzbDrone.Core.Test.ArrIntegration
 
             Assert.That(metadata.Title, Is.EqualTo("Show"));
 
+            using var cts = new CancellationTokenSource();
             provider.LookupMediaAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns<Task<MediaMetadata>>(_ => throw new OperationCanceledException("lookup"));
-            Assert.Throws<OperationCanceledException>(() => CreateService(provider).LookupAndEnrichByTitle(history));
+                .Returns<Task<MediaMetadata>>(_ =>
+                {
+                    cts.Cancel();
+                    throw new OperationCanceledException("lookup", cts.Token);
+                });
+            Assert.Throws<OperationCanceledException>(() => CreateService(provider).LookupAndEnrichByTitle(
+                history,
+                cts.Token));
         }
 
         [Test]
         public void FetchMetadataForRecord_propagates_cancellation()
         {
+            using var cts = new CancellationTokenSource();
             var provider = Substitute.For<IArrConnection>();
             provider.GetMediaDetailsAsync(9, Arg.Any<CancellationToken>())
-                .Returns<Task<MediaMetadata>>(_ => throw new OperationCanceledException("details"));
+                .Returns<Task<MediaMetadata>>(_ =>
+                {
+                    cts.Cancel();
+                    throw new OperationCanceledException("details", cts.Token);
+                });
 
             Assert.Throws<OperationCanceledException>(() => CreateService(provider).FetchMetadataForRecord(
                 new ArrDownloadRecord { Title = "Show", MediaId = 9 },
-                new ArrConnectionDefinition { Id = 1, Enable = true, ArrType = "Sonarr", Name = "S" }));
+                new ArrConnectionDefinition { Id = 1, Enable = true, ArrType = "Sonarr", Name = "S" },
+                cts.Token));
         }
 
         private ArrMetadataEnricherService CreateService(IArrConnection provider)
@@ -295,7 +341,10 @@ namespace NzbDrone.Core.Test.ArrIntegration
             {
                 new() { Id = 1, Enable = true, ArrType = "Sonarr", Name = "S", Url = "http://sonarr" }
             });
-            return new ArrMetadataEnricherService(_connectionFactory, _downloadHistoryRepository, providerFactory: _ => provider);
+            return new ArrMetadataEnricherService(
+                _connectionFactory,
+                _downloadHistoryRepository,
+                providerFactory: _ => provider);
         }
     }
 }

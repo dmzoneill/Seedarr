@@ -8,34 +8,29 @@ namespace NzbDrone.Core.ArrIntegration;
 
 public static class ArrConnectionResources
 {
+    // Declared before the clients so the static initializers below see it.
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
 
-    public static readonly HttpClient SharedClient = CreateSharedClient(acceptInvalidCertificates: false);
-
-    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S4830:Server certificates should be verified", Justification = "Explicitly provided for user-configured self-signed internal Arr certificates when requested")]
-    public static readonly HttpClient SharedInsecureClient = CreateSharedClient(acceptInvalidCertificates: true);
-
-    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S4830:Server certificates should be verified", Justification = "Explicitly provided for user-configured self-signed internal Arr certificates when requested")]
-    private static HttpClient CreateSharedClient(bool acceptInvalidCertificates)
+    public static readonly HttpClient SharedClient = new(new SocketsHttpHandler
     {
-        var handler = new SocketsHttpHandler
-        {
-            PooledConnectionLifetime = TimeSpan.FromMinutes(10)
-        };
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+    })
+    {
+        Timeout = DefaultTimeout
+    };
 
-        if (acceptInvalidCertificates)
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S4830:Server certificates should be verified", Justification = "Explicitly provided for user-configured self-signed internal Arr certificates when requested")]
+    public static readonly HttpClient SharedInsecureClient = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+        SslOptions = new SslClientAuthenticationOptions
         {
-            handler.SslOptions = new SslClientAuthenticationOptions
-            {
-                RemoteCertificateValidationCallback = (_, _, _, _) => true
-            };
+            RemoteCertificateValidationCallback = (_, _, _, _) => true
         }
-
-        return new HttpClient(handler)
-        {
-            Timeout = DefaultTimeout
-        };
-    }
+    })
+    {
+        Timeout = DefaultTimeout
+    };
 
     public static readonly ResiliencePipeline SharedPolicy = ResiliencePolicies.GetArrApiPolicy();
 

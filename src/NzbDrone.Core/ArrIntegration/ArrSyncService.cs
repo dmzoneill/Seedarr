@@ -129,7 +129,10 @@ public class ArrSyncService : IArrSyncService
                             {
                                 try
                                 {
-                                    var meta = _metadataEnricherService.FetchMetadataForRecord(record, definition, cancellationToken);
+                                    var meta = _metadataEnricherService.FetchMetadataForRecord(
+                                        record,
+                                        definition,
+                                        cancellationToken);
                                     if (meta != null)
                                     {
                                         hist.DataJson = System.Text.Json.JsonSerializer.Serialize(meta);
@@ -176,7 +179,10 @@ public class ArrSyncService : IArrSyncService
                             {
                                 try
                                 {
-                                    var meta = _metadataEnricherService.FetchMetadataForRecord(record, definition, cancellationToken);
+                                    var meta = _metadataEnricherService.FetchMetadataForRecord(
+                                        record,
+                                        definition,
+                                        cancellationToken);
                                     if (meta != null)
                                     {
                                         hist.DataJson = System.Text.Json.JsonSerializer.Serialize(meta);
@@ -261,7 +267,10 @@ public class ArrSyncService : IArrSyncService
                     {
                         try
                         {
-                            var meta = _metadataEnricherService.FetchMetadataForRecord(record, definition, cancellationToken);
+                            var meta = _metadataEnricherService.FetchMetadataForRecord(
+                                record,
+                                definition,
+                                cancellationToken);
                             if (meta != null)
                             {
                                 var hist = _downloadHistoryService.GetByInfoHash(torrent.InfoHash);
@@ -280,7 +289,7 @@ public class ArrSyncService : IArrSyncService
                     }
                 }
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 throw;
             }
