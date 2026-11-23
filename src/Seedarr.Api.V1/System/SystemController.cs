@@ -769,7 +769,7 @@ public class SystemController : ControllerBase
                 {
                     var processPath = Environment.ProcessPath ?? Environment.GetCommandLineArgs()[0];
                     var startInfo = ProcessRestart.CreateStartInfo(
-                        processPath, /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
+                        processPath,
                         Environment.GetCommandLineArgs(),
                         Environment.CurrentDirectory,
                         Environment.ProcessId,

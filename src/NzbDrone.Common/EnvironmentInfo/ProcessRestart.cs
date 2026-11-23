@@ -45,7 +45,7 @@ public static class ProcessRestart
 
         var startInfo = new ProcessStartInfo
         {
-            FileName = processPath, /* cmd-safe: fixed/admin-configured binary, args via ProcessStartInfo, no shell */ // nosemgrep
+            FileName = processPath,
             WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory,
             UseShellExecute = false
         };
