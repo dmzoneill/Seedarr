@@ -1713,8 +1713,8 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             return true;
         }
 
-        return eventType == AnnounceEvent.None &&
-               (torrent.Status == TorrentStatus.Stopped || torrent.Status == TorrentStatus.Paused);
+        var stoppedByStatus = torrent.Status == TorrentStatus.Stopped || torrent.Status == TorrentStatus.Paused;
+        return eventType == AnnounceEvent.None && stoppedByStatus;
     }
 
     private sealed class AnnounceFlight : IDisposable
