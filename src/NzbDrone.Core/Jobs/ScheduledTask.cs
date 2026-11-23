@@ -53,6 +53,14 @@ public class ScheduledTask : ModelBase
         return DateTime.SpecifyKind(next, DateTimeKind.Utc);
     }
 
+    private static DateTime GetDueCheckReference(DateTime lastUtc, int interval, DateTime now)
+    {
+        var normalizedInterval = interval <= 0 ? 15 : interval;
+        var lookbackSeconds = Math.Clamp(normalizedInterval * 60 / 4, 45, 180);
+        var reference = now.AddSeconds(-lookbackSeconds);
+        return reference < lastUtc ? lastUtc : reference;
+    }
+
     public static bool IsSchedulerDue(DateTime lastExecution, int interval, DateTime? utcNow = null)
     {
         var now = utcNow ?? DateTime.UtcNow;
@@ -63,17 +71,28 @@ public class ScheduledTask : ModelBase
         }
 
         var lastUtc = DateTime.SpecifyKind(lastExecution, DateTimeKind.Utc);
-        var reference = now.AddSeconds(-1);
-        if (reference < lastUtc)
-        {
-            reference = lastUtc;
-        }
+        var reference = GetDueCheckReference(lastUtc, interval, now);
 
         return now >= CalculateNextExecution(lastExecution, interval, reference);
     }
 
     public static DateTime GetSchedulerOrderingKey(DateTime lastExecution, int interval, DateTime? utcNow = null)
     {
-        return CalculateNextExecution(lastExecution, interval, utcNow);
+        var now = utcNow ?? DateTime.UtcNow;
+
+        if (lastExecution == DateTime.MinValue || lastExecution <= DateTime.MinValue.AddDays(1))
+        {
+            return DateTime.SpecifyKind(now, DateTimeKind.Utc);
+        }
+
+        var lastUtc = DateTime.SpecifyKind(lastExecution, DateTimeKind.Utc);
+        var reference = GetDueCheckReference(lastUtc, interval, now);
+        var activeSlot = CalculateNextExecution(lastExecution, interval, reference);
+        if (now >= activeSlot)
+        {
+            return activeSlot;
+        }
+
+        return CalculateNextExecution(lastExecution, interval, now);
     }
 }

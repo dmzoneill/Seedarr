@@ -161,7 +161,15 @@ public class Scheduler : BackgroundService
                         {
                             if (taskInstance != null)
                             {
-                                await Task.Run(() => taskInstance.Execute(cts.Token), cts.Token);
+                                if (taskInstance is IAsyncScheduledTask asyncTask)
+                                {
+                                    await asyncTask.ExecuteAsync(cts.Token);
+                                }
+                                else
+                                {
+                                    await Task.Run(() => taskInstance.Execute(cts.Token), cts.Token);
+                                }
+
                                 _logger.Debug("Scheduled task completed: {0}", next.TypeName);
                             }
                             else

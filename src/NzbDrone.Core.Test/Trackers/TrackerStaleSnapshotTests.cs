@@ -195,7 +195,7 @@ public class TrackerStaleSnapshotTests
             new() { Id = 8, TorrentId = 4, Url = "http://tracker.example/announce", Enabled = true }
         });
 
-        _multiTracker.Scrape(Arg.Any<TrackerEntry>(), Arg.Any<string>())
+        _multiTracker.ScrapeAsync(Arg.Any<TrackerEntry>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(_ =>
             {
                 _store.Mutate(4, row =>
@@ -207,13 +207,13 @@ public class TrackerStaleSnapshotTests
                     row.Label = "paused-by-user";
                 });
 
-                return new TrackerScrapeResponse
+                return Task.FromResult(new TrackerScrapeResponse
                 {
                     Success = true,
                     Complete = 6,
                     Incomplete = 2,
                     Downloaded = 10
-                };
+                });
             });
 
         await _scrape.ScrapeTorrentAsync(4);

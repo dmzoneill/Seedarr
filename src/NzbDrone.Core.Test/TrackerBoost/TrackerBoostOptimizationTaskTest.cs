@@ -53,31 +53,28 @@ public class TrackerBoostOptimizationTaskTest
     }
 
     [Test]
-    public void Execute_reentrancy_lock_prevents_overlapping_execution()
+    public async Task Execute_reentrancy_lock_prevents_overlapping_execution()
     {
-        var tcs = new TaskCompletionSource<bool>();
-        var concurrentRunAttempted = false;
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         _trackerBoostService.RunOptimizationCycleAsync(Arg.Any<CancellationToken>())
-            .Returns(tcs.Task);
+            .Returns(_ =>
+            {
+                started.TrySetResult(true);
+                return tcs.Task;
+            });
 
-        // Start first execution in background thread to hold the lock
-        var firstTask = Task.Run(() => _subject.Execute(CancellationToken.None));
+        var firstTask = _subject.ExecuteAsync(CancellationToken.None);
+        using var startedCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        await started.Task.WaitAsync(startedCts.Token);
 
-        // Wait briefly for first execution to acquire lock
-        Thread.Sleep(50);
+        await _subject.ExecuteAsync(CancellationToken.None);
 
-        // Attempt a second concurrent execution
-        _subject.Execute(CancellationToken.None);
-        concurrentRunAttempted = true;
-
-        // Release the first execution
         tcs.SetResult(true);
-        firstTask.Wait(1000);
+        await firstTask;
 
-        Assert.That(concurrentRunAttempted, Is.True);
-        // Only 1 cycle should have been run by the service; second execution should have been skipped
-        _trackerBoostService.Received(1).RunOptimizationCycleAsync(Arg.Any<CancellationToken>());
+        await _trackerBoostService.Received(1).RunOptimizationCycleAsync(Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -125,5 +122,23 @@ public class TrackerBoostOptimizationTaskTest
     public void DefaultInterval_is_two_minutes()
     {
         Assert.That(_subject.DefaultInterval, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task ExecuteAsync_awaits_optimization_cycle_without_blocking()
+    {
+        var tcs = new TaskCompletionSource<bool>();
+        _trackerBoostService.RunOptimizationCycleAsync(Arg.Any<CancellationToken>())
+            .Returns(tcs.Task);
+
+        using var cts = new CancellationTokenSource();
+        var executeTask = _subject.ExecuteAsync(cts.Token);
+
+        Assert.That(executeTask.IsCompleted, Is.False);
+
+        tcs.SetResult(true);
+        await executeTask;
+
+        await _trackerBoostService.Received(1).RunOptimizationCycleAsync(cts.Token);
     }
 }

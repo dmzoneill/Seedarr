@@ -732,4 +732,28 @@ public class SystemControllerTasksTest
         Assert.That(actionResult.Result, Is.InstanceOf<OkObjectResult>());
         _taskManager.Received(1).Update(3, 15, false);
     }
+
+    [Test]
+    public void GetTasks_does_not_report_stale_LastStartTime_as_running_when_task_manager_is_idle()
+    {
+        var staleTask = new ScheduledTask
+        {
+            Id = 8,
+            TypeName = typeof(SampleScheduledTask).FullName,
+            Interval = 60,
+            LastExecution = DateTime.UtcNow.AddDays(-42),
+            LastStartTime = DateTime.UtcNow.AddDays(-42).AddHours(1)
+        };
+        _taskManager.GetAll().Returns(new List<ScheduledTask> { staleTask });
+        _taskManager.IsRunning(staleTask.TypeName).Returns(false);
+
+        var actionResult = _controller.GetTasks();
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var resources = okResult.Value as List<ScheduledTaskResource>;
+        Assert.That(resources, Has.Count.EqualTo(1));
+        Assert.That(resources[0].IsRunning, Is.False);
+        Assert.That(resources[0].LastDuration, Is.Null);
+    }
 }
