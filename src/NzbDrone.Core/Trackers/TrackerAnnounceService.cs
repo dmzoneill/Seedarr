@@ -77,6 +77,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     private readonly ConcurrentDictionary<string, (string PeerId, string AnnounceKey)> _ephemeralIdentities = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<int, List<List<string>>> _torrentTierOrder = new();
     private readonly ConcurrentDictionary<string, byte> _sessionStarted = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _inFlightAnnounces = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentQueue<int> _staggeredQueue = new();
     private readonly object _staggeredLock = new();
     private readonly Logger _logger;
@@ -359,6 +360,27 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             return results;
         }
 
+        using var announceFlight = await AnnounceFlight.AcquireAsync(
+            _inFlightAnnounces,
+            torrent.Id,
+            candidateTrackers.Select(entry => entry.Url),
+            IsMustDeliverAnnounce(torrent, eventType)).ConfigureAwait(false);
+        if (announceFlight == null)
+        {
+            foreach (var busy in candidateTrackers)
+            {
+                results.Add(new TrackerAnnounceResult
+                {
+                    TrackerId = busy.Id,
+                    Url = busy.Url,
+                    Success = false,
+                    FailureReason = "Already announcing"
+                });
+            }
+
+            return results;
+        }
+
         // BEP 12: Group candidate trackers by Tier into tiered structure
         var tieredEntries = candidateTrackers
             .GroupBy(t => t.Tier)
@@ -387,19 +409,18 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             announceEvent = AnnounceEvent.None;
         }
 
-        if (!_torrentTierOrder.ContainsKey(torrent.Id))
+        var initialTierOrder = tieredEntries
+            .Select(tier => tier.Select(e => e.Url).ToList())
+            .ToList();
+        _torrentTierOrder.TryAdd(torrent.Id, initialTierOrder);
+        if (_torrentTierOrder.TryGetValue(torrent.Id, out var cachedTiers))
         {
-            _torrentTierOrder[torrent.Id] = tieredEntries
-                .Select(tier => tier.Select(e => e.Url).ToList())
-                .ToList();
-        }
-        else if (_torrentTierOrder.TryGetValue(torrent.Id, out var cachedTiers))
-        {
+            var tierSnapshot = cachedTiers.Select(tier => tier.ToList()).ToList();
             for (var i = 0; i < tieredEntries.Count; i++)
             {
-                if (i < cachedTiers.Count)
+                if (i < tierSnapshot.Count)
                 {
-                    var cachedUrls = cachedTiers[i];
+                    var cachedUrls = tierSnapshot[i];
                     tieredEntries[i] = tieredEntries[i]
                         .OrderBy(e =>
                         {
@@ -724,19 +745,26 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
     private void PromoteTrackerInTorrentTierOrder(int torrentId, int tier, string trackerUrl)
     {
-        if (_torrentTierOrder.TryGetValue(torrentId, out var tiers))
-        {
-            foreach (var t in tiers)
+        _torrentTierOrder.AddOrUpdate(
+            torrentId,
+            _ => new List<List<string>>(),
+            (_, tiers) =>
             {
-                var idx = t.IndexOf(trackerUrl);
-                if (idx > 0)
+                var copy = tiers.Select(urls => new List<string>(urls)).ToList();
+                foreach (var urls in copy)
                 {
-                    t.RemoveAt(idx);
-                    t.Insert(0, trackerUrl);
-                    break;
+                    var idx = urls.FindIndex(url => string.Equals(url, trackerUrl, StringComparison.OrdinalIgnoreCase));
+                    if (idx > 0)
+                    {
+                        var promoted = urls[idx];
+                        urls.RemoveAt(idx);
+                        urls.Insert(0, promoted);
+                        break;
+                    }
                 }
-            }
-        }
+
+                return copy;
+            });
     }
 
     public TrackerAnnounceResult AnnounceTracker(Torrent torrent, TrackerEntry entry, bool force = false, AnnounceEvent eventType = AnnounceEvent.None)
@@ -840,6 +868,22 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         {
             _logger.Debug("VPN kill switch fail-closed is active; halting tracker announce execution for {0}.", entry?.Url);
             return new TrackerAnnounceResult { Success = false, FailureReason = "VPN outage: announce deferred" };
+        }
+
+        using var announceFlight = await AnnounceFlight.AcquireAsync(
+            _inFlightAnnounces,
+            torrent.Id,
+            new[] { entry.Url },
+            IsMustDeliverAnnounce(torrent, eventType)).ConfigureAwait(false);
+        if (announceFlight == null)
+        {
+            return new TrackerAnnounceResult
+            {
+                TrackerId = entry.Id,
+                Url = entry.Url,
+                Success = false,
+                FailureReason = "Already announcing"
+            };
         }
 
         var isStopped = torrent.Status == TorrentStatus.Stopped || torrent.Status == TorrentStatus.Paused || eventType == AnnounceEvent.Stopped;
@@ -1656,6 +1700,102 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             _staggeredCts?.Cancel();
             _staggeredCts?.Dispose();
             _staggeredCts = null;
+        }
+    }
+
+    // Stopped and completed announces tell the tracker the session ended or the download finished.
+    // Dropping them because a regular announce is in flight would leave a ghost peer or lose the
+    // completion, so they wait for the in-flight announce instead of being skipped.
+    private static bool IsMustDeliverAnnounce(Torrent torrent, AnnounceEvent eventType)
+    {
+        if (eventType == AnnounceEvent.Stopped || eventType == AnnounceEvent.Completed)
+        {
+            return true;
+        }
+
+        var stoppedByStatus = torrent.Status == TorrentStatus.Stopped || torrent.Status == TorrentStatus.Paused;
+        return eventType == AnnounceEvent.None && stoppedByStatus;
+    }
+
+    private sealed class AnnounceFlight : IDisposable
+    {
+        internal static readonly TimeSpan MustDeliverMaxWait = TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan MustDeliverPollInterval = TimeSpan.FromMilliseconds(25);
+
+        private readonly ConcurrentDictionary<string, byte> _gate;
+        private readonly List<string> _keys;
+
+        private AnnounceFlight(ConcurrentDictionary<string, byte> gate, List<string> keys)
+        {
+            _gate = gate;
+            _keys = keys;
+        }
+
+        public static async Task<AnnounceFlight> AcquireAsync(
+            ConcurrentDictionary<string, byte> gate,
+            int torrentId,
+            IEnumerable<string> urls,
+            bool mustDeliver)
+        {
+            var urlList = urls.ToList();
+            var flight = TryAcquire(gate, torrentId, urlList);
+            if (flight != null || !mustDeliver)
+            {
+                return flight;
+            }
+
+            var waited = Stopwatch.StartNew();
+            while (waited.Elapsed < MustDeliverMaxWait)
+            {
+                await Task.Delay(MustDeliverPollInterval).ConfigureAwait(false);
+                flight = TryAcquire(gate, torrentId, urlList);
+                if (flight != null)
+                {
+                    return flight;
+                }
+            }
+
+            // A wedged regular announce must not swallow the final stopped/completed event:
+            // send it anyway without holding the gate.
+            return new AnnounceFlight(gate, new List<string>());
+        }
+
+        private static AnnounceFlight TryAcquire(
+            ConcurrentDictionary<string, byte> gate,
+            int torrentId,
+            IEnumerable<string> urls)
+        {
+            var keys = new List<string>();
+            foreach (var url in urls)
+            {
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    continue;
+                }
+
+                var key = torrentId.ToString(CultureInfo.InvariantCulture) + "\n" + url.Trim();
+                if (!gate.TryAdd(key, 0))
+                {
+                    foreach (var held in keys)
+                    {
+                        gate.TryRemove(held, out _);
+                    }
+
+                    return null;
+                }
+
+                keys.Add(key);
+            }
+
+            return new AnnounceFlight(gate, keys);
+        }
+
+        public void Dispose()
+        {
+            foreach (var key in _keys)
+            {
+                _gate.TryRemove(key, out _);
+            }
         }
     }
 }
