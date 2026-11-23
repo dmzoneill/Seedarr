@@ -24,6 +24,8 @@ public class TrackerServerTest
 {
     private const string DefaultInfoHash = "0123456789abcdef0123456789abcdef01234567";
     private const string DefaultPeerId = "01234567890123456789";
+    private const string RateLimitedHash = "74657374746573747465737474657374aaaaaaaa";
+    private const string OtherSwarmHash = "6f746865726f746865726f746865726f74686572";
     private Core.TrackerServer.TrackerServer _trackerServer;
     private IPeerDatabase _peerDatabase;
     private IConfigService _configService;
@@ -1714,7 +1716,7 @@ public class TrackerServerTest
     }
 
     [Test]
-    public void IsRateLimited_does_not_reset_when_the_info_hash_changes()
+    public void IsRateLimited_should_track_different_swarms_on_same_ip_independently()
     {
         _configService.TrackerRateLimitPerMinute.Returns(2);
 
@@ -1723,7 +1725,7 @@ public class TrackerServerTest
         InvokeIsRateLimited("192.168.1.1", "hashA");
 
         Assert.That(InvokeIsRateLimited("192.168.1.1", "hashA"), Is.True);
-        Assert.That(InvokeIsRateLimited("192.168.1.1", "hashB"), Is.True);
+        Assert.That(InvokeIsRateLimited("192.168.1.1", "hashB"), Is.False);
     }
 
     // ---- PurgeExpiredRateLimits tests ----
@@ -2227,29 +2229,31 @@ public class TrackerServerTest
     {
         _configService.TrackerRateLimitPerMinute.Returns(1);
 
-        // Pre-warm the rate limiter by calling IsRateLimited for 127.0.0.1 and the test info_hash.
+        // Pre-warm the rate limiter by calling IsRateLimited for 127.0.0.1 and a valid 40-hex info_hash.
         // After 2 calls, count=2 which exceeds limit=1.
-        InvokeIsRateLimited("127.0.0.1", "74657374");
-        InvokeIsRateLimited("127.0.0.1", "74657374");
+        InvokeIsRateLimited("127.0.0.1", RateLimitedHash);
+        InvokeIsRateLimited("127.0.0.1", RateLimitedHash);
 
         // This request from 127.0.0.1 should now be rate limited
         var (response, _) = SendHttpRequestViaHandleRequest(
-            "GET /announce?info_hash=test&port=6881 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            $"GET /announce?info_hash={RateLimitedHash}&port=6881 HTTP/1.1\r\nHost: localhost\r\n\r\n");
         Assert.That(response, Does.StartWith("HTTP/1.1 429"));
     }
 
     [Test]
-    public void HandleRequest_rate_limit_follows_the_ip_when_the_info_hash_changes()
+    public void HandleRequest_should_allow_different_info_hashes_from_same_ip_when_one_is_rate_limited()
     {
         _configService.TrackerRateLimitPerMinute.Returns(1);
         _peerDatabase.GetPeers(Arg.Any<string>()).Returns(new List<TrackerPeerEntry>());
 
-        InvokeIsRateLimited("127.0.0.1", "74657374");
-        InvokeIsRateLimited("127.0.0.1", "74657374");
+        // Rate limit one swarm on 127.0.0.1
+        InvokeIsRateLimited("127.0.0.1", RateLimitedHash);
+        InvokeIsRateLimited("127.0.0.1", RateLimitedHash);
 
+        // A request for another swarm should succeed with 200 OK because rate limits are per swarm
         var (response, _) = SendHttpRequestViaHandleRequest(
-            "GET /announce?info_hash=other&port=6881 HTTP/1.1\r\nHost: localhost\r\n\r\n");
-        Assert.That(response, Does.StartWith("HTTP/1.1 429"));
+            $"GET /announce?info_hash={OtherSwarmHash}&port=6881 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        Assert.That(response, Does.StartWith("HTTP/1.1 200 OK"));
     }
 
     [Test]
@@ -2545,9 +2549,9 @@ public class TrackerServerTest
     [Test]
     public void PruneStalePeerTraffic_removes_entries_that_never_sent_stopped()
     {
-        var field = typeof(Core.TrackerServer.TrackerServer).GetField("_peerTraffic", BindingFlags.NonPublic | BindingFlags.Instance);
-        var traffic = (ConcurrentDictionary<string, (long Uploaded, long Downloaded, DateTime LastSeenUtc)>)field.GetValue(_trackerServer);
-        traffic["old"] = (10, 20, DateTime.UtcNow.AddMinutes(-(Core.TrackerServer.TrackerServer.PeerTrafficTtlMinutes + 5)));
+        var traffic = GetPeerTraffic();
+        var staleAge = Core.TrackerServer.TrackerServer.PeerTrafficTtlMinutes + 5;
+        traffic["old"] = (10, 20, DateTime.UtcNow.AddMinutes(-staleAge));
         traffic["fresh"] = (10, 20, DateTime.UtcNow);
 
         var removed = _trackerServer.PruneStalePeerTraffic();
@@ -2570,8 +2574,7 @@ public class TrackerServerTest
     [Test]
     public void PruneStalePeerTraffic_drops_the_oldest_rows_when_the_map_is_over_capacity()
     {
-        var field = typeof(Core.TrackerServer.TrackerServer).GetField("_peerTraffic", BindingFlags.NonPublic | BindingFlags.Instance);
-        var traffic = (ConcurrentDictionary<string, (long Uploaded, long Downloaded, DateTime LastSeenUtc)>)field.GetValue(_trackerServer);
+        var traffic = GetPeerTraffic();
         var now = DateTime.UtcNow;
         for (var i = 0; i < Core.TrackerServer.TrackerServer.MaxPeerTrafficEntries + 1; i++)
         {
@@ -2583,5 +2586,28 @@ public class TrackerServerTest
         Assert.That(removed, Is.EqualTo(1));
         Assert.That(traffic.Count, Is.EqualTo(Core.TrackerServer.TrackerServer.MaxPeerTrafficEntries));
         Assert.That(traffic.ContainsKey("peer-0"), Is.False);
+    }
+
+    [Test]
+    public void IsRateLimited_does_not_throttle_one_client_announcing_more_torrents_than_the_limit()
+    {
+        _configService.TrackerRateLimitPerMinute.Returns(60);
+
+        var limited = Enumerable.Range(0, 150)
+            .Count(i => InvokeIsRateLimited("198.51.100.7", i.ToString("x40")));
+
+        Assert.That(limited, Is.Zero, "Each torrent's regular announce has its own budget");
+        Assert.That(
+            Enumerable.Range(0, 61).Count(_ => InvokeIsRateLimited("198.51.100.7", "feed")),
+            Is.EqualTo(1),
+            "Hammering a single swarm is still limited");
+    }
+
+    private ConcurrentDictionary<string, (long Uploaded, long Downloaded, DateTime LastSeenUtc)> GetPeerTraffic()
+    {
+        var field = typeof(Core.TrackerServer.TrackerServer)
+            .GetField("_peerTraffic", BindingFlags.NonPublic | BindingFlags.Instance);
+        return (ConcurrentDictionary<string, (long Uploaded, long Downloaded, DateTime LastSeenUtc)>)field
+            .GetValue(_trackerServer);
     }
 }

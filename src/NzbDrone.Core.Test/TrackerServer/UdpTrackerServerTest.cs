@@ -1075,7 +1075,7 @@ public class UdpTrackerServerTest
     }
 
     [Test]
-    public void IsRateLimited_does_not_reset_when_the_info_hash_changes()
+    public void IsRateLimited_should_track_different_swarms_on_same_ip_independently()
     {
         _configService.TrackerRateLimitPerMinute.Returns(2);
 
@@ -1084,7 +1084,7 @@ public class UdpTrackerServerTest
         InvokeIsRateLimited("10.0.0.1", "hashA");
 
         Assert.That(InvokeIsRateLimited("10.0.0.1", "hashA"), Is.True);
-        Assert.That(InvokeIsRateLimited("10.0.0.1", "hashB"), Is.True);
+        Assert.That(InvokeIsRateLimited("10.0.0.1", "hashB"), Is.False);
     }
 
     [Test]

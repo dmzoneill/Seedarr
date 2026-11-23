@@ -39,7 +39,8 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
     private readonly ITorrentService _torrentService;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, RateLimitEntry> _rateLimits = new();
-    private readonly ConcurrentDictionary<string, (long Uploaded, long Downloaded, DateTime LastSeenUtc)> _peerTraffic = new();
+    private readonly ConcurrentDictionary<string, (long Uploaded, long Downloaded, DateTime LastSeenUtc)> _peerTraffic =
+        new();
     private readonly object _listenerLock = new();
 
     private TcpListener _listener;
@@ -837,7 +838,8 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
             });
         }
 
-        var cacheKey = "multi:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\n', infoHashes.OrderBy(hash => hash, StringComparer.OrdinalIgnoreCase)))));
+        var sortedHashes = string.Join('\n', infoHashes.OrderBy(hash => hash, StringComparer.OrdinalIgnoreCase));
+        var cacheKey = "multi:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sortedHashes)));
         return _scrapeCache.GetOrCreate(cacheKey, () => BuildMultiScrapeResponse(infoHashes));
     }
 
@@ -1062,9 +1064,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, IDisp
             return false;
         }
 
-        // Per IP. A key of ip:infoHash lets a caller reset the bucket by rotating info_hash.
-        var key = ip ?? string.Empty;
-        _ = infoHash;
+        var key = string.IsNullOrEmpty(infoHash) ? ip : $"{ip}:{infoHash.ToLowerInvariant()}";
         var now = DateTime.UtcNow;
         var entry = _rateLimits.AddOrUpdate(
             key,

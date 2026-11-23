@@ -697,9 +697,7 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>, ID
             return false;
         }
 
-        // Per IP. A key of ip:infoHash lets a caller reset the bucket by rotating info_hash.
-        var key = ip ?? string.Empty;
-        _ = infoHash;
+        var key = string.IsNullOrEmpty(infoHash) ? ip : $"{ip}:{infoHash.ToLowerInvariant()}";
         var now = DateTime.UtcNow;
         var entry = _rateLimits.AddOrUpdate(
             key,
