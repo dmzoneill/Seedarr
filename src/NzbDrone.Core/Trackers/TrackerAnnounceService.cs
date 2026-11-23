@@ -360,7 +360,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             return results;
         }
 
-        using var announceFlight = AnnounceFlight.TryAcquire(_inFlightAnnounces, torrent.Id, candidateTrackers.Select(entry => entry.Url));
+        using var announceFlight = await AnnounceFlight.AcquireAsync(
+            _inFlightAnnounces,
+            torrent.Id,
+            candidateTrackers.Select(entry => entry.Url),
+            IsMustDeliverAnnounce(torrent, eventType)).ConfigureAwait(false);
         if (announceFlight == null)
         {
             foreach (var busy in candidateTrackers)
@@ -866,7 +870,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             return new TrackerAnnounceResult { Success = false, FailureReason = "VPN outage: announce deferred" };
         }
 
-        using var announceFlight = AnnounceFlight.TryAcquire(_inFlightAnnounces, torrent.Id, new[] { entry.Url });
+        using var announceFlight = await AnnounceFlight.AcquireAsync(
+            _inFlightAnnounces,
+            torrent.Id,
+            new[] { entry.Url },
+            IsMustDeliverAnnounce(torrent, eventType)).ConfigureAwait(false);
         if (announceFlight == null)
         {
             return new TrackerAnnounceResult
@@ -1695,8 +1703,25 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         }
     }
 
+    // Stopped and completed announces tell the tracker the session ended or the download finished.
+    // Dropping them because a regular announce is in flight would leave a ghost peer or lose the
+    // completion, so they wait for the in-flight announce instead of being skipped.
+    private static bool IsMustDeliverAnnounce(Torrent torrent, AnnounceEvent eventType)
+    {
+        if (eventType == AnnounceEvent.Stopped || eventType == AnnounceEvent.Completed)
+        {
+            return true;
+        }
+
+        return eventType == AnnounceEvent.None &&
+               (torrent.Status == TorrentStatus.Stopped || torrent.Status == TorrentStatus.Paused);
+    }
+
     private sealed class AnnounceFlight : IDisposable
     {
+        internal static readonly TimeSpan MustDeliverMaxWait = TimeSpan.FromSeconds(10);
+        private static readonly TimeSpan MustDeliverPollInterval = TimeSpan.FromMilliseconds(25);
+
         private readonly ConcurrentDictionary<string, byte> _gate;
         private readonly List<string> _keys;
 
@@ -1706,7 +1731,39 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             _keys = keys;
         }
 
-        public static AnnounceFlight TryAcquire(ConcurrentDictionary<string, byte> gate, int torrentId, IEnumerable<string> urls)
+        public static async Task<AnnounceFlight> AcquireAsync(
+            ConcurrentDictionary<string, byte> gate,
+            int torrentId,
+            IEnumerable<string> urls,
+            bool mustDeliver)
+        {
+            var urlList = urls.ToList();
+            var flight = TryAcquire(gate, torrentId, urlList);
+            if (flight != null || !mustDeliver)
+            {
+                return flight;
+            }
+
+            var waited = Stopwatch.StartNew();
+            while (waited.Elapsed < MustDeliverMaxWait)
+            {
+                await Task.Delay(MustDeliverPollInterval).ConfigureAwait(false);
+                flight = TryAcquire(gate, torrentId, urlList);
+                if (flight != null)
+                {
+                    return flight;
+                }
+            }
+
+            // A wedged regular announce must not swallow the final stopped/completed event:
+            // send it anyway without holding the gate.
+            return new AnnounceFlight(gate, new List<string>());
+        }
+
+        private static AnnounceFlight TryAcquire(
+            ConcurrentDictionary<string, byte> gate,
+            int torrentId,
+            IEnumerable<string> urls)
         {
             var keys = new List<string>();
             foreach (var url in urls)
