@@ -59,6 +59,21 @@ public class SchedulerTest
         _taskManager = Substitute.For<ITaskManager>();
     }
 
+    [TearDown]
+    public async Task TearDown()
+    {
+        if (_subject == null)
+        {
+            return;
+        }
+
+        // StartAsync's token only guards startup; without StopAsync the scheduler loop keeps
+        // ticking (or re-running an always-due mocked task) for the rest of the test run.
+        await _subject.StopAsync(CancellationToken.None);
+        _subject.Dispose();
+        _subject = null;
+    }
+
     [Test]
     public async Task ExecuteAsync_should_stop_when_cancellation_requested()
     {
