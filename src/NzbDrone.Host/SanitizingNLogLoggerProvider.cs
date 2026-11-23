@@ -8,9 +8,14 @@ namespace NzbDrone.Host;
 
 public static class HostingLog
 {
+    // ASP.NET Core logs every request start/finish at Information. Routing those through NLog
+    // would flood the file log and the in-app log buffer, so only warnings and above get through.
+    public const string AspNetCoreCategory = "Microsoft.AspNetCore";
+
     public static void Configure(ILoggingBuilder logging)
     {
         logging.ClearProviders();
+        logging.AddFilter(AspNetCoreCategory, MelLogLevel.Warning);
         logging.AddProvider(new SanitizingNLogLoggerProvider());
     }
 }
