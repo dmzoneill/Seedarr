@@ -63,6 +63,7 @@ public static class Bootstrap
         container.RegisterDelegate<IDatabase>(r => r.Resolve<IMainDatabase>(), Reuse.Singleton, ifAlreadyRegistered: IfAlreadyRegistered.Replace);
 
         var builder = WebApplication.CreateBuilder();
+        HostingLog.Configure(builder.Logging);
         var configProvider = container.Resolve<IConfigFileProvider>();
         var certManager = container.Resolve<ICertificateManager>();
         var httpsListenerAvailability = new HttpsListenerAvailability();
