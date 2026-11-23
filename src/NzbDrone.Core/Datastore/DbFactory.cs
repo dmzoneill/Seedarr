@@ -137,6 +137,8 @@ public class DbFactory : IDbFactory
         return dbType == DatabaseType.SQLite ? CleanSqliteConnectionString(connectionString) : connectionString;
     }
 
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+
     public static string CleanSqliteConnectionString(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -146,23 +148,31 @@ public class DbFactory : IDbFactory
 
         var busyTimeoutMatch = Regex.Match(
             connectionString,
-            @"(?i)Busy\s+Timeout\s*=\s*(\d+)");
+            @"(?i)Busy\s+Timeout\s*=\s*(\d+)",
+            RegexOptions.None,
+            RegexTimeout);
 
         var defaultTimeoutMatch = Regex.Match(
             connectionString,
-            @"(?i)Default\s+Timeout\s*=\s*(\d+)");
+            @"(?i)Default\s+Timeout\s*=\s*(\d+)",
+            RegexOptions.None,
+            RegexTimeout);
 
         // Remove unsupported "Busy Timeout" parameter to prevent Microsoft.Data.Sqlite keyword exceptions
         var cleaned = Regex.Replace(
             connectionString,
             @"(?i)Busy\s+Timeout\s*=\s*[^;]+;?",
-            "");
+            "",
+            RegexOptions.None,
+            RegexTimeout);
 
         // Remove Cache=Shared to restore WAL fine-grained page-level multi-reader concurrency
         cleaned = Regex.Replace(
             cleaned,
             @"(?i)Cache\s*=\s*Shared\s*;?",
-            "").Trim();
+            "",
+            RegexOptions.None,
+            RegexTimeout).Trim();
 
         var timeoutSeconds = 30;
         if (defaultTimeoutMatch.Success && int.TryParse(defaultTimeoutMatch.Groups[1].Value, out var parsedDefaultTimeout))
@@ -174,13 +184,13 @@ public class DbFactory : IDbFactory
             timeoutSeconds = parsedBusyTimeout >= 1000 ? parsedBusyTimeout / 1000 : parsedBusyTimeout;
         }
 
-        if (!Regex.IsMatch(cleaned, @"(?i)Default\s+Timeout\s*="))
+        if (!Regex.IsMatch(cleaned, @"(?i)Default\s+Timeout\s*=", RegexOptions.None, RegexTimeout))
         {
             var separator = cleaned.EndsWith(';') || string.IsNullOrEmpty(cleaned) ? "" : ";";
             cleaned = $"{cleaned}{separator}Default Timeout={timeoutSeconds};";
         }
 
-        if (!Regex.IsMatch(cleaned, @"(?i)Foreign\s+Keys\s*="))
+        if (!Regex.IsMatch(cleaned, @"(?i)Foreign\s+Keys\s*=", RegexOptions.None, RegexTimeout))
         {
             var separator = cleaned.EndsWith(';') || string.IsNullOrEmpty(cleaned) ? "" : ";";
             cleaned = $"{cleaned}{separator}Foreign Keys=True;";
