@@ -58,6 +58,11 @@ public class Startup
         var apiAssembly = Assembly.Load("Seedarr.Api.V1");
         var httpAssembly = Assembly.Load("Seedarr.Http");
 
+        services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+        {
+            options.MultipartBodyLengthLimit = Seedarr.Http.RequestBodyLimits.Default;
+        });
+
         services.AddControllers(options =>
             {
                 options.InputFormatters.Insert(0, new Seedarr.Api.V1.Transmission.TransmissionRpcInputFormatter());

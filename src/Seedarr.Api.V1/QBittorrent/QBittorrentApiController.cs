@@ -21,6 +21,7 @@ using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
+using Seedarr.Http;
 using Seedarr.Http.Security;
 
 namespace Seedarr.Api.V1.QBittorrent;
@@ -598,6 +599,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     }
 
     [HttpPost("torrents/add")]
+    [RequestSizeLimit(RequestBodyLimits.TorrentUploadRequest)]
+    [RequestFormLimits(MultipartBodyLengthLimit = RequestBodyLimits.TorrentUploadPerFile)]
     public async Task<ActionResult> AddTorrents([FromForm] QBitAddTorrentsRequest request = null)
     {
         request ??= new QBitAddTorrentsRequest();

@@ -157,6 +157,8 @@ public class PackageController : ControllerBase
     [HttpPost("import")]
     [HttpPost("/api/v1/package/import")]
     [Authorize(Policy = Policies.Operator)]
+    [RequestSizeLimit(RequestBodyLimits.PackageImport)]
+    [RequestFormLimits(MultipartBodyLengthLimit = RequestBodyLimits.PackageImport)]
     public async Task<IActionResult> Import(
         IFormFile file = null,
         [FromQuery] string destinationPath = null,

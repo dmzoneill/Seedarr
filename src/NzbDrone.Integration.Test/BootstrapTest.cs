@@ -109,7 +109,7 @@ public class BootstrapTest
 
         Bootstrap.ConfigureKestrelLimits(serverOptions);
 
-        Assert.That(serverOptions.Limits.MaxRequestBodySize, Is.EqualTo(500L * 1024 * 1024));
+        Assert.That(serverOptions.Limits.MaxRequestBodySize, Is.EqualTo(64L * 1024 * 1024));
         Assert.That(serverOptions.Limits.MaxConcurrentConnections, Is.EqualTo(1000L));
         Assert.That(serverOptions.Limits.KeepAliveTimeout, Is.EqualTo(TimeSpan.FromMinutes(2)));
         Assert.That(serverOptions.Limits.RequestHeadersTimeout, Is.EqualTo(TimeSpan.FromSeconds(30)));
