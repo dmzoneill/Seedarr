@@ -21,19 +21,14 @@ public class NewznabIndexer : IIndexer
     private readonly IProxySettingsProvider _proxySettingsProvider;
 
     private readonly object _syncLock = new();
-    private SocketsHttpHandler _proxyHandler;
-    private HttpClient _proxyClient;
-    private string _lastProxyHost;
-    private int _lastProxyPort;
-    private ProxyType _lastProxyType;
-    private bool _lastProxyEnabled;
+    private readonly IndexerProxyState _proxyState = new();
 
     internal HttpMessageHandler Handler
     {
         get
         {
             EnsureProxyClient();
-            return _proxyHandler;
+            return _proxyState.Handler;
         }
     }
 
@@ -108,7 +103,7 @@ public class NewznabIndexer : IIndexer
             EnsureProxyClient();
             lock (_syncLock)
             {
-                return _proxyClient ?? DefaultClient;
+                return _proxyState.Client ?? DefaultClient;
             }
         }
 
@@ -122,7 +117,7 @@ public class NewznabIndexer : IIndexer
 
     private void EnsureProxyClient()
     {
-        IndexerProxyClient.Ensure(_proxySettingsProvider, _syncLock, ref _proxyClient, ref _proxyHandler, ref _lastProxyEnabled, ref _lastProxyHost, ref _lastProxyPort, ref _lastProxyType, DefaultClient);
+        _proxyState.Ensure(_proxySettingsProvider, _syncLock, DefaultClient);
     }
 
     public bool TestConnection(IndexerDefinition definition)
