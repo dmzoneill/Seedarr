@@ -67,8 +67,8 @@ WORKDIR /app
 
 COPY --from=backend /app ./
 COPY --from=frontend /build/src/NzbDrone.Host/wwwroot/ ./wwwroot/
+COPY version ./
 COPY CHANGELOG.md ./
-RUN awk 'match($0, /^## \[v([0-9]+\.[0-9]+\.[0-9]+)\]/) { print "version=" substr($0, RSTART+5, RLENGTH-6); exit }' CHANGELOG.md > version
 COPY tests/fixtures/ /app/fixtures/
 COPY --chmod=755 container-entrypoint.sh /container-entrypoint.sh
 
@@ -79,7 +79,7 @@ EXPOSE 9898
 
 VOLUME ["/config", "/data"]
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 CMD ["curl", "-f", "http://localhost:9898/api/v1/system/status"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 CMD curl -f http://localhost:9898/api/v1/system/status || exit 1
 
 ENTRYPOINT ["/container-entrypoint.sh"]
 
