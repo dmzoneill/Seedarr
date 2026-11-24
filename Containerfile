@@ -67,8 +67,8 @@ WORKDIR /app
 
 COPY --from=backend /app ./
 COPY --from=frontend /build/src/NzbDrone.Host/wwwroot/ ./wwwroot/
-COPY version ./
 COPY CHANGELOG.md ./
+RUN sed -nE 's/^## \[v([0-9]+\.[0-9]+\.[0-9]+)\].*/version=\1/p' CHANGELOG.md | head -n 1 > version
 COPY tests/fixtures/ /app/fixtures/
 COPY --chmod=755 container-entrypoint.sh /container-entrypoint.sh
 
