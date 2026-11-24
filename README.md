@@ -1,7 +1,3 @@
-<p align="center">
-  <img src=".github/logo.png" alt="Seedarr logo" width="128" />
-</p>
-
 <div align="center">
   <center>
     <img src="logo/seedarr-skull.svg" alt="Seedarr" width="200"/>
